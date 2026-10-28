@@ -1,0 +1,2 @@
+[functions.inspec360-create-user]
+verify_jwt = true
