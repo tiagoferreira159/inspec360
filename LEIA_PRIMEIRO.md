@@ -141,3 +141,23 @@ https://supabase.com/docs/guides/getting-started/api-keys
 https://supabase.com/docs/guides/api
 https://supabase.com/docs/guides/auth/passwords
 https://supabase.com/docs/guides/storage/security/access-control
+
+## Editor completo do laudo (versão 4)
+
+Na inspeção, abra Gerar laudo. O editor permite preencher e editar os 15 tópicos iniciais: Introdução, Considerações Iniciais, Identificação, Realização do Laudo, Datas das Vistorias, Ficha Técnica, Registro Fotográfico, Metodologia, Critério Utilizado, Prioridades, Documentação Analisada, Ordem das Prioridades – Grau de Prioridade, Conclusão, Encerramento e Anexos.
+
+- Selecione um tópico à esquerda para editar título e texto. Use + Tópico e + Subitem para ampliar a estrutura (até seis níveis).
+- Use Subir/Descer para organizar os tópicos e subitens dentro do mesmo nível. A opção Incluir controla a presença do tópico e de seus descendentes no laudo.
+- Preencha o título do laudo e o tipo do imóvel. O tipo também pode ser informado no cadastro do condomínio.
+- Abra Formatação, fotografias, cabeçalho e rodapé para escolher 1, 2 ou 3 fotos por linha, fonte, tamanhos e cores do texto e dos títulos, além dos textos de cabeçalho e rodapé.
+- Salvar laudo guarda as configurações e os conteúdos desta inspeção no banco. Pré-visualizar, Word e PDF também salvam as alterações antes de gerar o documento, quando o usuário tem permissão de edição.
+- Administradores podem Salvar como modelo padrão para reaproveitar a estrutura em inspeções sem laudo configurado. Inspeções já configuradas mantêm seu próprio documento.
+- O Registro Fotográfico inclui automaticamente os ambientes, itens, constatações e fotos cadastrados na inspeção. Os textos técnicos dos demais tópicos são preenchidos pelo responsável; o sistema não inventa conclusões.
+
+Para organizar os ambientes, abra a inspeção → Ambientes e verificações → Organizar ordem das áreas. Use as setas e Salvar ordem. Essa ordem será usada na árvore da inspeção e nos documentos. A operação é atômica e recusa uma lista desatualizada quando outro usuário alterou as áreas.
+
+O sumário da prévia e do PDF é calculado com as páginas A4 efetivamente montadas pelo navegador. Na impressão, selecione A4, escala 100% e desative os cabeçalhos/rodapés automáticos do navegador, pois o próprio laudo já contém esses elementos.
+
+O Word usa sua paginação nativa e um campo de sumário com referências aos títulos. Ao abrir ou editar o arquivo no Word, confirme a atualização dos campos ou use Atualizar sumário/F9 para refletir a paginação do editor utilizado. Word e navegador podem produzir números de páginas diferentes; cada formato mantém suas próprias referências. As fotos no Word são organizadas em tabelas de 1, 2 ou 3 colunas.
+
+Em uma instalação nova, execute também 03_ORDENAR_AREAS.sql após 01_CRIAR_BANCO.sql. A migração já está aplicada no projeto atual. Inclua report-studio.js e report-editor.css junto aos arquivos do site.

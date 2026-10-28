@@ -43,3 +43,20 @@ Os quatro registros temporários estão identificados por “Validação técnic
 A função inspec360-create-user está publicada com verificação JWT habilitada. Ela valida o usuário no Auth, consulta seu perfil administrador ativo pela API com RLS, cria a conta no Auth e usa a RPC existente para vincular o perfil, revalidando a autorização. Contas existentes não são modificadas nem vinculadas automaticamente. Em caso de falha de vínculo, a função tenta remover apenas a conta que acabou de criar.
 
 Testes automatizados do servidor: ausência/token inválido, ausência de perfil administrador, validação dos campos, duplicidade, criação/vínculo, compensação e CORS. Testes de DOM simulados: formulário sem UID, confirmação de senha, criação e manutenção da sessão administrativa. No endpoint hospedado, OPTIONS/CORS foi verificado e chamadas sem sessão/com token inválido receberam HTTP 401. Ainda não foi criada uma conta real por essa função durante esta validação; o caminho positivo de Auth/RPC foi exercitado com APIs simuladas.
+
+## Laudos configuráveis e ordenação das áreas
+
+Implementados editor por inspeção, os 15 tópicos solicitados, subitens até seis níveis, títulos editáveis, tipo do imóvel, inclusão/exclusão e ordenação de tópicos, modelo padrão da organização, fontes/tamanhos/cores, cabeçalho/rodapé e fotografias em até três colunas.
+
+A configuração é guardada em inspections.payload.reportDoc e o modelo compartilhado em settings.payload.reportTemplate, protegidos pelas políticas existentes. A migração inspec360_reorder_inspection_areas adiciona uma RPC SECURITY INVOKER: usa RLS, exige editor/admin e confere a lista e as versões antes de atualizar todas as ordens na mesma transação.
+
+Validação:
+- Testes de modelo (Node): todos os tópicos iniciais, subitens, exclusão, ordenação, agrupamento de três fotos e sanitização da formatação.
+- PostgreSQL/PGlite: reordenação atômica, recusa de versões antigas e bloqueio do perfil consulta. No banco hospedado, a RPC também foi executada em uma transação revertida, sem modificar as áreas reais.
+- Chromium local, com API de teste simulada e imagens sintéticas: editor, salvamento, modelo padrão, consulta sem edição, ordem de áreas, fontes e grupos de 1/2/3 fotos, paginação de parágrafos longos e sumário com várias páginas.
+- PDF real de seis páginas: quantidade de páginas conferida, sumário comparado ao mapa de títulos, cabeçalho/rodapé/numeração em todas as páginas e inspeção visual das seis páginas.
+- DOCX real renderizado por LibreOffice para PDF/PNG: seis páginas inspecionadas visualmente, sumário, cabeçalho/rodapé, fotos em duas linhas de três, estrutura XML e campos atualizáveis do Word.
+
+O Word usa paginação nativa, evitando que diferenças de métricas em relação ao navegador provoquem páginas vazias. Após editar o arquivo no Word, os campos/sumário precisam ser atualizados no próprio editor. A impressão do PDF deve usar A4, escala 100% e os cabeçalhos/rodapés automáticos do navegador desativados.
+
+Nenhum conteúdo de laudo, conclusão ou imagem de cliente foi criado/modificado pelos testes. O teste visual usou apenas dados locais sintéticos; o teste da RPC hospedada foi revertido.

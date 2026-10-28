@@ -24,3 +24,13 @@
   for = "/config.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/report-studio.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/report-editor.css"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
