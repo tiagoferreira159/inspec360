@@ -17,3 +17,13 @@
 - A geração original de Word/PDF foi preservada, mas não foi validada visualmente nesta atualização. Teste com um laudo real após instalar.
 - Testes em dois dispositivos reais, mudança de senha no serviço hospedado e políticas no bucket do projeto precisam ser executados no ambiente do usuário.
 - O pacote não foi publicado no Netlify nesta entrega.
+
+## Configuração do ambiente hospedado
+
+A migração create_inspec360_initial_schema foi aplicada no projeto ngicvcysdkuasjnmxyas.
+As três tabelas públicas estão com RLS habilitado, e o bucket inspec360-arquivos está privado.
+A auditoria de segurança do Supabase retornou zero alertas. A consulta executada como authenticated sem vínculo não visualizou organizações, membros ou registros.
+
+Nenhuma conta Auth foi criada automaticamente. O responsável deve cadastrar a conta inicial diretamente em Authentication → Users; depois ela poderá ser vinculada como administradora. Não foram criadas credenciais ou funções administrativas de instalação.
+
+Ainda depende da conta inicial: teste real de login válido, gravação com usuário administrador e upload/download autenticado de uma fotografia no ambiente hospedado.
