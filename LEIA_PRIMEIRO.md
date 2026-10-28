@@ -86,23 +86,29 @@ A importação preserva os IDs e vínculos entre registros; ignora usuários, ha
 
 Não há transação única envolvendo upload de todos os arquivos: se a internet cair, pode haver importação parcial. O sistema avisa e não substitui o que já existe. Não apague o backup original. Revise os registros no painel antes de repetir uma migração; solicite apoio se houver importação parcial. Não use o backup sem fotos para migrar dados.
 
-## 8. Cadastre os usuários do cliente
+## 8. Cadastre os usuários diretamente no Inspec360
 
-1. Supabase → Authentication → Users → Add user → Create new user.
-2. Informe e-mail e senha inicial forte. Confirme apenas contas que você verificou.
-3. Copie o User UID dessa pessoa (identificador UUID da conta).
-4. No site, entre como administrador → Gestão de acessos → Vincular usuário.
-5. Cole o User UID, informe o nome e escolha o perfil.
-6. Salve e peça à pessoa que entre no site.
+1. Entre no site como administrador.
+2. Abra Gestão de acessos → Novo usuário.
+3. Informe nome, e-mail, senha inicial e confirmação da senha.
+4. Escolha Administrador, Engenheiro / Editor ou Consulta.
+5. Clique em Cadastrar. A conta e o perfil são criados juntos no servidor.
+6. O usuário já pode entrar com o e-mail e a senha inicial cadastrados. Ele pode alterar a própria senha em Minha senha.
+
+Não é necessário abrir o painel do Supabase nem copiar User UID para cadastrar novas pessoas. A conta inicial de administrador continua sendo preparada pelos passos 2 e 4 ao instalar do zero.
 
 Perfis:
-- Administrador: registros, configurações, backup/importação e gestão dos vínculos de acesso.
-- Engenheiro / Editor: cadastros, inspeções, fotos e laudos; sem gestão de acessos/configurações/backup administrativo.
-- Consulta: visualização e geração de laudos; sem gravação de dados. Pode alterar a própria senha.
+- Administrador: registros, configurações, backups e cadastro/gestão dos usuários da organização.
+- Engenheiro / Editor: cadastros, inspeções, fotos e laudos, sem gestão de usuários.
+- Consulta: visualização e geração de laudos, sem gravação de dados.
 
-Cada usuário pode alterar a própria senha em Minha senha. O administrador não redefine senhas de outras pessoas pelo HTML. Usuários desativados no Inspec360 perdem acesso aos dados via RLS mesmo que tenham uma sessão Auth válida; cópias já baixadas anteriormente não são recolhidas.
+O servidor confere o JWT de quem solicita e a condição de administrador ativo na organização. A chave administrativa fica exclusivamente no ambiente da função Supabase; não é enviada ao navegador. Senhas são processadas pelo Supabase Auth e não são gravadas em tabelas da aplicação, respostas ou logs da função.
 
-Todos os usuários vinculados à MESMA organização compartilham todos os registros dessa organização. Esta edição abre uma organização por conta; não possui seletor de organizações. Para novos clientes que precisem de isolamento, crie outra organização e vínculos separados com apoio técnico, usando as tabelas e políticas existentes. Não vincule clientes independentes à organização inicial esperando separação por condomínio.
+A criação administrativa confirma o e-mail sem enviar convite. O administrador deve conferir o endereço e entregar a senha inicial ao usuário por um canal adequado. O sistema não envia e-mails neste fluxo. E-mails já registrados no Auth não são vinculados automaticamente, para evitar apropriação de contas existentes.
+
+A função inspec360-create-user já está instalada no projeto configurado. Para outra instalação, publique o código em supabase/functions/inspec360-create-user/index.ts no Supabase com verify_jwt=true. Esse código é executado no servidor, não pelo Netlify. As variáveis SUPABASE_URL, SUPABASE_ANON_KEY e SUPABASE_SERVICE_ROLE_KEY são fornecidas pelo ambiente Supabase. Nunca copie a chave administrativa para config.js.
+
+Todos os usuários da mesma organização compartilham seus registros. Clientes independentes devem ter organizações separadas. Esta edição abre uma organização por conta.
 
 ## 9. Uso e manutenção
 

@@ -37,3 +37,9 @@ Pela interface hospedada foram gravados e lidos um condomínio, uma inspeção, 
 O envio da imagem sintética de teste não foi concluído: a autorização de upload do navegador foi recusada. Nenhum arquivo foi enviado por outra rota. O usuário pediu que a conclusão prossiga apenas pelas integrações, sem navegador Cloud. As políticas de acesso a fotos foram verificadas no banco; o fluxo de upload foi testado localmente com API/canvas simulados, mas o upload/download real continua pendente.
 
 Os quatro registros temporários estão identificados por “Validação técnica temporária”, “Teste técnico de gravação e fotografia”, “Ambiente de validação” e “Item técnico temporário”. Não há fotografias de teste no Storage.
+
+## Cadastro de usuários pela ferramenta
+
+A função inspec360-create-user está publicada com verificação JWT habilitada. Ela valida o usuário no Auth, consulta seu perfil administrador ativo pela API com RLS, cria a conta no Auth e usa a RPC existente para vincular o perfil, revalidando a autorização. Contas existentes não são modificadas nem vinculadas automaticamente. Em caso de falha de vínculo, a função tenta remover apenas a conta que acabou de criar.
+
+Testes automatizados do servidor: ausência/token inválido, ausência de perfil administrador, validação dos campos, duplicidade, criação/vínculo, compensação e CORS. Testes de DOM simulados: formulário sem UID, confirmação de senha, criação e manutenção da sessão administrativa. No endpoint hospedado, OPTIONS/CORS foi verificado e chamadas sem sessão/com token inválido receberam HTTP 401. Ainda não foi criada uma conta real por essa função durante esta validação; o caminho positivo de Auth/RPC foi exercitado com APIs simuladas.

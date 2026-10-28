@@ -77,7 +77,7 @@ async function load() {
   D=next;sessionUser=me;
 }
 async function put(kind,obj) {
-  if(kind==='users')throw Error('Use a gestão de acessos para vincular usuários.');
+  if(kind==='users')throw Error('Use a gestão de acessos para cadastrar usuários.');
   if(!canEdit())throw Error('Acesso somente consulta.');
   if(kind==='settings'&&!isAdmin())throw Error('Somente o administrador altera configurações.');
   let payload={...obj};delete payload.blob;delete payload._revision;
@@ -157,16 +157,33 @@ async function logout(){
 }
 function renderUsers(){
   if(!isAdmin())return '<div class="alert">Acesso restrito.</div>';
-  return `<div class="card"><h2>Acessos à organização</h2><p>Primeiro crie a conta em Supabase → Authentication → Users. Depois copie o User UID e vincule a conta abaixo. E-mail e senha são administrados no Supabase.</p>${btn('+ Vincular usuário','newUser','','primary')}</div><div class="card tablewrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody>${D.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${roleLabels[u.role]}</td><td>${u.active?'Ativo':'Inativo'}</td><td>${btn('Editar perfil','editUser',`data-id="${esc(u.id)}"`,'sm')} ${u.id!==sessionUser.id?btn(u.active?'Desativar':'Ativar','toggleUser',`data-id="${esc(u.id)}"`,'sm'):''}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="card"><h2>Acessos à organização</h2><p>Cadastre os usuários da sua equipe e defina o perfil de acesso. As contas ficam disponíveis para entrar no sistema em qualquer dispositivo.</p>${btn('+ Novo usuário','newUser','','primary')}</div><div class="card tablewrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody>${D.users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${roleLabels[u.role]}</td><td>${u.active?'Ativo':'Inativo'}</td><td>${btn('Editar perfil','editUser',`data-id="${esc(u.id)}"`,'sm')} ${u.id!==sessionUser.id?btn(u.active?'Desativar':'Ativar','toggleUser',`data-id="${esc(u.id)}"`,'sm'):''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function userModal(id){
   if(!isAdmin())return;
   const u=D.users.find(x=>x.id===id)||{};
-  modal(id?'Editar perfil':'Vincular conta existente',`${id?'':field('userId','User UID (copie de Authentication → Users)','','text',true)}${field('name','Nome',u.name||'','text',true)}${select('role','Perfil',[['admin','Administrador'],['editor','Engenheiro / Editor'],['viewer','Consulta']],u.role||'viewer')}<p class="hint">Alterações de e-mail e redefinição de senha são feitas pelo responsável no painel do Supabase.</p>`,'Salvar',async v=>{
-    if(id===sessionUser.id&&v.role!=='admin')throw Error('Não remova seu próprio perfil administrador.');
-    await cloudRequest('/rest/v1/rpc/inspec_set_member',{method:'POST',body:{p_workspace:workspaceId,p_user:id||v.userId.trim(),p_name:v.name,p_role:v.role,p_active:u.active??true}});
-    await load();closeModal();render();toast('Perfil salvo.');
+  const passwordFields=id?'':`${field('email','E-mail','','email',true)}${field('initialPassword','Senha inicial (mínimo 10 caracteres)','','password',true)}${field('confirmPassword','Confirmar senha inicial','','password',true)}`;
+  modal(id?'Editar perfil':'Cadastrar usuário',`${field('name','Nome',u.name||'','text',true)}${id?`<p class="hint">${esc(u.email||'')}</p>`:''}${passwordFields}${select('role','Perfil',[['admin','Administrador'],['editor','Engenheiro / Editor'],['viewer','Consulta']],u.role||'viewer')}<p class="hint">${id?'Altere o nome e o perfil de acesso.':'O usuário poderá entrar com o e-mail e a senha inicial informados. Ele poderá trocar a própria senha em Minha senha.'}</p>`,id?'Salvar':'Cadastrar',async v=>{
+    if(id){
+      if(id===sessionUser.id&&v.role!=='admin')throw Error('Não remova seu próprio perfil administrador.');
+      await cloudRequest('/rest/v1/rpc/inspec_set_member',{method:'POST',body:{p_workspace:workspaceId,p_user:id,p_name:v.name,p_role:v.role,p_active:u.active??true}});
+    }else{
+      if(v.initialPassword!==v.confirmPassword)throw Error('As senhas informadas não coincidem.');
+      if(v.initialPassword.length<10||v.initialPassword.length>128)throw Error('Use uma senha inicial com 10 a 128 caracteres.');
+      if(D.users.some(x=>x.email.toLowerCase()===v.email.trim().toLowerCase()))throw Error('Este e-mail já está cadastrado na organização.');
+      await cloudRequest('/functions/v1/inspec360-create-user',{method:'POST',body:{workspaceId,name:v.name,email:v.email,password:v.initialPassword,role:v.role}});
+    }
+    // Após a confirmação do servidor, remove os campos de senha antes de atualizar a lista.
+    if(!id)closeModal();
+    try{await load();}catch(ex){closeModal();toast((id?'Perfil salvo.':'Usuário cadastrado.')+' Clique em Atualizar dados para recarregar a lista.');return;}
+    closeModal();render();toast(id?'Perfil salvo.':'Usuário cadastrado com sucesso.');
   });
+  if(!id){
+    for(const name of ['initialPassword','confirmPassword']){
+      const input=document.querySelector('#modal-form [name="'+name+'"]');
+      input.minLength=10;input.maxLength=128;input.autocomplete='new-password';
+    }
+  }
 }
 async function toggleUser(id){
   const u=by('users',id);if(!isAdmin()||!u||id===sessionUser.id)return;
