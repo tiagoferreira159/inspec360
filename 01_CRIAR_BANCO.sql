@@ -1,6 +1,9 @@
 -- Execute todo este arquivo no SQL Editor do projeto Supabase.
 -- Não apaga tabelas ou registros existentes. Estrutura exclusiva da versão cloud.
 begin;
+create schema if not exists inspec_private;
+revoke all on schema inspec_private from public,anon;
+grant usage on schema inspec_private to authenticated;
 create table if not exists public.inspec_workspaces (
   id uuid primary key default gen_random_uuid(),
   name text not null
@@ -23,21 +26,21 @@ create table if not exists public.inspec_records (
   updated_at timestamptz not null default clock_timestamp(),
   primary key (workspace_id,kind,id)
 );
-create or replace function public.inspec_role(p_workspace uuid)
+create or replace function inspec_private.inspec_role(p_workspace uuid)
 returns text language sql stable security definer set search_path=''
 as $$
   select m.role from public.inspec_members m
   where m.workspace_id=p_workspace and m.user_id=auth.uid() and m.active;
 $$;
-revoke all on function public.inspec_role(uuid) from public, anon;
-grant execute on function public.inspec_role(uuid) to authenticated;
+revoke all on function inspec_private.inspec_role(uuid) from public, anon;
+grant execute on function inspec_private.inspec_role(uuid) to authenticated;
 
-create or replace function public.inspec_touch_record()
+create or replace function inspec_private.inspec_touch_record()
 returns trigger language plpgsql set search_path=''
 as $$ begin new.updated_at=clock_timestamp();return new;end; $$;
 drop trigger if exists inspec_record_updated on public.inspec_records;
 create trigger inspec_record_updated before update on public.inspec_records
-for each row execute function public.inspec_touch_record();
+for each row execute function inspec_private.inspec_touch_record();
 
 alter table public.inspec_workspaces enable row level security;
 alter table public.inspec_members enable row level security;
@@ -48,37 +51,37 @@ grant select,insert,update,delete on public.inspec_records to authenticated;
 
 drop policy if exists inspec_workspace_read on public.inspec_workspaces;
 create policy inspec_workspace_read on public.inspec_workspaces for select to authenticated
-using (public.inspec_role(id) is not null);
+using (inspec_private.inspec_role(id) is not null);
 drop policy if exists inspec_member_read on public.inspec_members;
 create policy inspec_member_read on public.inspec_members for select to authenticated
-using (public.inspec_role(workspace_id) is not null);
+using (inspec_private.inspec_role(workspace_id) is not null);
 drop policy if exists inspec_record_read on public.inspec_records;
 create policy inspec_record_read on public.inspec_records for select to authenticated
-using (public.inspec_role(workspace_id) is not null);
+using (inspec_private.inspec_role(workspace_id) is not null);
 drop policy if exists inspec_record_insert on public.inspec_records;
 create policy inspec_record_insert on public.inspec_records for insert to authenticated
-with check (public.inspec_role(workspace_id) in ('admin','editor')
-and (kind<>'settings' or public.inspec_role(workspace_id)='admin'));
+with check (inspec_private.inspec_role(workspace_id) in ('admin','editor')
+and (kind<>'settings' or inspec_private.inspec_role(workspace_id)='admin'));
 drop policy if exists inspec_record_update on public.inspec_records;
 create policy inspec_record_update on public.inspec_records for update to authenticated
-using (public.inspec_role(workspace_id) in ('admin','editor')
-and (kind<>'settings' or public.inspec_role(workspace_id)='admin'))
-with check (public.inspec_role(workspace_id) in ('admin','editor')
-and (kind<>'settings' or public.inspec_role(workspace_id)='admin'));
+using (inspec_private.inspec_role(workspace_id) in ('admin','editor')
+and (kind<>'settings' or inspec_private.inspec_role(workspace_id)='admin'))
+with check (inspec_private.inspec_role(workspace_id) in ('admin','editor')
+and (kind<>'settings' or inspec_private.inspec_role(workspace_id)='admin'));
 drop policy if exists inspec_record_delete on public.inspec_records;
 create policy inspec_record_delete on public.inspec_records for delete to authenticated
-using (public.inspec_role(workspace_id) in ('admin','editor')
-and (kind<>'settings' or public.inspec_role(workspace_id)='admin'));
+using (inspec_private.inspec_role(workspace_id) in ('admin','editor')
+and (kind<>'settings' or inspec_private.inspec_role(workspace_id)='admin'));
 
 -- Vincular contas existentes e alterar perfis: somente administradores da organização.
 -- Nunca usa user_metadata informado pelo próprio usuário para conceder privilégios.
-create or replace function public.inspec_set_member(
+create or replace function inspec_private.inspec_set_member(
   p_workspace uuid, p_user uuid, p_name text, p_role text, p_active boolean
 ) returns void language plpgsql security definer set search_path=''
 as $$
 declare v_email text;
 begin
-  if public.inspec_role(p_workspace) is distinct from 'admin' then
+  if inspec_private.inspec_role(p_workspace) is distinct from 'admin' then
     raise exception 'Somente administrador';
   end if;
   -- Serializa mudanças nos perfis da organização.
@@ -97,6 +100,16 @@ begin
   set name=excluded.name,email=excluded.email,role=excluded.role,active=excluded.active;
 end;
 $$;
+revoke all on function inspec_private.inspec_set_member(uuid,uuid,text,text,boolean) from public,anon;
+grant execute on function inspec_private.inspec_set_member(uuid,uuid,text,text,boolean) to authenticated;
+
+-- Endpoint público mínimo: autorização e mutação ficam na função interna.
+create or replace function public.inspec_set_member(
+  p_workspace uuid, p_user uuid, p_name text, p_role text, p_active boolean
+) returns void language sql security invoker set search_path=''
+as $$
+  select inspec_private.inspec_set_member(p_workspace,p_user,p_name,p_role,p_active);
+$$;
 revoke all on function public.inspec_set_member(uuid,uuid,text,text,boolean) from public,anon;
 grant execute on function public.inspec_set_member(uuid,uuid,text,text,boolean) to authenticated;
 
@@ -113,21 +126,21 @@ allowed_mime_types=array['image/jpeg','image/png','image/webp'];
 
 -- O caminho dos arquivos começa com o UUID da organização.
 -- Comparação textual evita lançar erro ao receber caminhos inválidos.
-create or replace function public.inspec_storage_role(p_path text)
+create or replace function inspec_private.inspec_storage_role(p_path text)
 returns text language sql stable security definer set search_path=''
 as $$
   select m.role from public.inspec_members m where m.user_id=auth.uid()
   and m.active and m.workspace_id::text=split_part(p_path,'/',1);
 $$;
-revoke all on function public.inspec_storage_role(text) from public,anon;
-grant execute on function public.inspec_storage_role(text) to authenticated;
+revoke all on function inspec_private.inspec_storage_role(text) from public,anon;
+grant execute on function inspec_private.inspec_storage_role(text) to authenticated;
 drop policy if exists inspec_file_read on storage.objects;
 create policy inspec_file_read on storage.objects for select to authenticated
-using(bucket_id='inspec360-arquivos' and public.inspec_storage_role(name) is not null);
+using(bucket_id='inspec360-arquivos' and inspec_private.inspec_storage_role(name) is not null);
 drop policy if exists inspec_file_insert on storage.objects;
 create policy inspec_file_insert on storage.objects for insert to authenticated
-with check(bucket_id='inspec360-arquivos' and public.inspec_storage_role(name) in ('admin','editor'));
+with check(bucket_id='inspec360-arquivos' and inspec_private.inspec_storage_role(name) in ('admin','editor'));
 drop policy if exists inspec_file_delete on storage.objects;
 create policy inspec_file_delete on storage.objects for delete to authenticated
-using(bucket_id='inspec360-arquivos' and public.inspec_storage_role(name) in ('admin','editor'));
+using(bucket_id='inspec360-arquivos' and inspec_private.inspec_storage_role(name) in ('admin','editor'));
 commit;
