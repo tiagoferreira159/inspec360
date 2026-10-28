@@ -34,3 +34,8 @@
   for = "/report-editor.css"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/template-studio.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"

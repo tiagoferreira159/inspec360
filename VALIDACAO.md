@@ -60,3 +60,8 @@ Validação:
 O Word usa paginação nativa, evitando que diferenças de métricas em relação ao navegador provoquem páginas vazias. Após editar o arquivo no Word, os campos/sumário precisam ser atualizados no próprio editor. A impressão do PDF deve usar A4, escala 100% e os cabeçalhos/rodapés automáticos do navegador desativados.
 
 Nenhum conteúdo de laudo, conclusão ou imagem de cliente foi criado/modificado pelos testes. O teste visual usou apenas dados locais sintéticos; o teste da RPC hospedada foi revertido.
+
+## Modelos de inspeção personalizados
+- 18 testes automatizados aprovados (4 novos para modelos e 14 de regressão): itens específicos por ambiente, nomes repetidos, aplicação repetida, preservação de avaliações e ordem, retomada de aplicação interrompida e permissões de consulta/editor.
+- Chromium com API sintética: criação com dois ambientes e itens diferentes, edição salva, aplicação pela tela de modelos e pela inspeção, repetição sem duplicidades, duplicação e exclusão sem remover dados da inspeção. Sem erros JavaScript.
+- Supabase real: inserção e leitura de um modelo com dois itens sob o usuário administrador, em transação revertida (ROLLBACK); nenhuma fixture persistida. Políticas existentes verificadas: somente administradores alteram settings; editores aplicam áreas e itens; consulta somente leitura. Nenhuma migração necessária.

@@ -161,3 +161,10 @@ O sumário da prévia e do PDF é calculado com as páginas A4 efetivamente mont
 O Word usa sua paginação nativa e um campo de sumário com referências aos títulos. Ao abrir ou editar o arquivo no Word, confirme a atualização dos campos ou use Atualizar sumário/F9 para refletir a paginação do editor utilizado. Word e navegador podem produzir números de páginas diferentes; cada formato mantém suas próprias referências. As fotos no Word são organizadas em tabelas de 1, 2 ou 3 colunas.
 
 Em uma instalação nova, execute também 03_ORDENAR_AREAS.sql após 01_CRIAR_BANCO.sql. A migração já está aplicada no projeto atual. Inclua report-studio.js e report-editor.css junto aos arquivos do site.
+
+### Modelos de inspeção personalizados
+Em **Modelos e listas**, o administrador pode criar um modelo vazio ou duplicar o modelo inicial. No editor, use **+ Ambiente**, selecione o ambiente e adicione quantos **itens de verificação** precisar. Cada ambiente possui uma lista própria. As setas alteram a ordem de ambientes e itens. Clique em **Salvar modelo** para gravar na organização; outros usuários com acesso poderão consultar os modelos.
+
+Em uma inspeção, **Aplicar modelo** permite escolher qualquer modelo cadastrado. Também é possível escolher a inspeção diretamente na tela de modelos. A aplicação acrescenta ambientes e itens ausentes, compara nomes sem diferenciar maiúsculas e espaços nas extremidades, mantém a ordem existente e preserva avaliações e fotos. A estrutura do modelo é copiada: edições ou exclusões posteriores do modelo não alteram inspeções já criadas. Engenheiros/editores podem aplicar; usuários de consulta podem visualizar; administrar modelos requer perfil Administrador.
+
+Os modelos são registros individuais `settings` com `type: inspectionTemplate`, protegidos pelas políticas existentes e pelo controle de revisão. A gravação de um modelo não substitui as configurações gerais nem o modelo do laudo. Se a conexão interromper a aplicação, é possível repetir para concluir os itens ausentes.
