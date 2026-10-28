@@ -36,3 +36,16 @@ test('áreas ordenadas são refletidas no registro fotográfico e três fotos fo
 test('ordenação não modifica a lista original e preserva a posição zero',()=>{
   const source=[{id:'b',order:2},{id:'a',order:0}];assert.deepEqual(plain(studio.ordered(source)).map(x=>x.id),['a','b']);assert.deepEqual(source.map(x=>x.id),['b','a']);
 });
+
+test('laudo antigo com registro fotográfico recriado como subitem recupera as fotos sem alterar textos',()=>{
+ const r=data();r.sections=[{area:{id:'a',name:'Portaria',order:0},items:[{item:{id:'i',name:'Pisos',status:'Conforme'},findings:[],photos:[{id:'p',caption:'Piso da portaria'}]}]}];
+ const saved={version:1,sections:[{id:'intro',title:'Considerações Iniciais',body:'Texto preservado',enabled:true,kind:'text',children:[{id:'registro',title:'Registro Fotográfico',body:'Texto do usuário',enabled:true,kind:'text',children:[]}]}]};
+ const before=JSON.stringify(saved),doc=studio.normalize(saved,r);assert.equal(doc.version,2);assert.equal(doc.sections[0].children[0].kind,'photos');assert.equal(doc.sections[0].children[0].body,'Texto do usuário');assert.equal(JSON.stringify(saved),before);
+ const blocks=studio.compose(r,doc);assert.equal(blocks.filter(b=>b.type==='photos').flatMap(b=>b.photos).length,1);assert(blocks.some(b=>b.text==='Texto do usuário'));assert(blocks.some(b=>b.anchor==='item_i'));
+});
+test('migração não duplica vínculo existente e respeita exclusões e escolhas da versão nova',()=>{
+ const r=data(),raw={version:1,sections:[{id:'one',title:'Registro Fotográfico',kind:'text',enabled:true,children:[]},{id:'two',title:'Vistoria',kind:'photos',enabled:true,children:[]}]};
+ assert.equal(studio.normalize(raw,r).sections.filter(n=>n.kind==='photos').length,1);
+ raw.sections[1].enabled=false;assert.equal(studio.normalize(raw,r).sections[0].kind,'text');
+ raw.version=2;raw.sections=raw.sections.slice(0,1);assert.equal(studio.normalize(raw,r).sections[0].kind,'text');
+});
