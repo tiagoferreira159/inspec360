@@ -27,3 +27,13 @@ A auditoria de segurança do Supabase retornou zero alertas. A consulta executad
 Nenhuma conta Auth foi criada automaticamente. O responsável deve cadastrar a conta inicial diretamente em Authentication → Users; depois ela poderá ser vinculada como administradora. Não foram criadas credenciais ou funções administrativas de instalação.
 
 Ainda depende da conta inicial: teste real de login válido, gravação com usuário administrador e upload/download autenticado de uma fotografia no ambiente hospedado.
+
+## Validação com a conta inicial
+
+A conta inicial foi criada pelo próprio responsável no painel do Supabase, confirmada e vinculada como administradora. Na versão de prévia publicada pelo Netlify, o login funcionou e exibiu o perfil Administrador.
+
+Pela interface hospedada foram gravados e lidos um condomínio, uma inspeção, um ambiente e um item temporários. A pré-visualização do laudo funcionou e o Word foi exportado: o arquivo DOCX baixado foi verificado como ZIP íntegro, com XML válido e conteúdo da inspeção.
+
+O envio da imagem sintética de teste não foi concluído: a autorização de upload do navegador foi recusada. Nenhum arquivo foi enviado por outra rota. O usuário pediu que a conclusão prossiga apenas pelas integrações, sem navegador Cloud. As políticas de acesso a fotos foram verificadas no banco; o fluxo de upload foi testado localmente com API/canvas simulados, mas o upload/download real continua pendente.
+
+Os quatro registros temporários estão identificados por “Validação técnica temporária”, “Teste técnico de gravação e fotografia”, “Ambiente de validação” e “Item técnico temporário”. Não há fotografias de teste no Storage.
