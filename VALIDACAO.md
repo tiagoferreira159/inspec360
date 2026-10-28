@@ -65,3 +65,10 @@ Nenhum conteúdo de laudo, conclusão ou imagem de cliente foi criado/modificado
 - 18 testes automatizados aprovados (4 novos para modelos e 14 de regressão): itens específicos por ambiente, nomes repetidos, aplicação repetida, preservação de avaliações e ordem, retomada de aplicação interrompida e permissões de consulta/editor.
 - Chromium com API sintética: criação com dois ambientes e itens diferentes, edição salva, aplicação pela tela de modelos e pela inspeção, repetição sem duplicidades, duplicação e exclusão sem remover dados da inspeção. Sem erros JavaScript.
 - Supabase real: inserção e leitura de um modelo com dois itens sob o usuário administrador, em transação revertida (ROLLBACK); nenhuma fixture persistida. Políticas existentes verificadas: somente administradores alteram settings; editores aplicam áreas e itens; consulta somente leitura. Nenhuma migração necessária.
+
+## Correção do vínculo fotográfico em laudos personalizados
+- Causa reproduzida: tópico Registro Fotográfico recriado como texto em subitem de um laudo versão 1, sem nenhum tópico com kind=photos. As fotos permaneciam vinculadas aos itens no banco, mas não eram compostas no documento.
+- Normalização versão 2 recupera esse vínculo em documentos legados, mantendo IDs, textos, hierarquia, ordem e exclusões. Documentos já na versão 2 respeitam a escolha explícita de conteúdo automático. Vínculos existentes não são duplicados.
+- Editor permite escolher o conteúdo automático do tópico e informa quantidade de fotos cadastradas e onde serão incluídas. Validação impede dois tópicos fotográficos ativos para evitar repetição.
+- 20 testes automatizados aprovados. Chromium com API e imagens sintéticas reproduziu o caso legado: prévia e impressão com quatro fotos, texto preservado, seletor funcional e vínculo salvo. Word conferido com quatro imagens incorporadas; PDF conferido com quatro ocorrências de imagem.
+- Nenhuma alteração direta em laudos, textos ou fotos de produção; recuperação aplicada ao abrir/gerar o documento e persistida pelo fluxo normal de salvamento.

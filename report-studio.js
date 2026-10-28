@@ -19,7 +19,7 @@ function defaults(r){
   sections[5].kind='technical';
   sections[6].kind='photos';
   sections[7].body=r.profile.methodology||'';
-  return {version:1,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),toc:true,sections};
+  return {version:2,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),toc:true,sections};
 }
 function normalize(value,r){
   const base=defaults(r),raw=value&&typeof value==='object'?value:{};
@@ -39,6 +39,16 @@ function normalize(value,r){
     });
   }
   result.sections=nodes(Array.isArray(raw.sections)?raw.sections:base.sections);
+  // Versão 1 permitia recriar Registro Fotográfico como texto, perdendo o vínculo.
+  // Recupera somente esse vínculo em documentos antigos, sem mudar corpo/ordem/IDs.
+  if(Number(raw.version||1)<2){
+    const all=[];const visit=list=>{for(const n of list){all.push(n);visit(n.children);}};visit(result.sections);
+    if(!all.some(n=>n.kind==='photos')){
+      const match=all.find(n=>n.title.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLocaleLowerCase('pt-BR')==='registro fotografico');
+      if(match)match.kind='photos';
+    }
+  }
+  result.version=2;
   return result;
 }
 function findNode(id,list=editor.draft.sections,parent=null,depth=1){
@@ -59,11 +69,13 @@ function outlineHTML(nodes=editor.draft.sections,depth=1,prefix=''){
 function selectedHTML(){
   const found=findNode(editor.selected);if(!found)return '<p class="hint">Adicione ou selecione um tópico.</p>';
   const {node,depth}=found,disabled=canEdit()?'':'disabled';
-  return `<h3>Conteúdo do tópico</h3><div class="field"><label for="rp-section-title">Título do tópico</label><input id="rp-section-title" maxlength="180" data-section-field="title" value="${esc(node.title)}" ${disabled}></div><label><input type="checkbox" data-section-field="enabled" ${node.enabled?'checked':''} ${disabled}> Incluir este tópico e seus subitens no laudo</label><div class="field" style="margin-top:12px"><label for="rp-section-body">Texto do tópico</label><textarea id="rp-section-body" data-section-field="body" ${disabled}>${esc(node.body)}</textarea></div>${node.kind!=='text'?`<p class="hint">${({photos:'As áreas, os itens, as constatações e as fotos desta inspeção serão incluídos automaticamente, na ordem cadastrada.',identification:'A identificação do empreendimento e o tipo do imóvel serão incluídos automaticamente.',technical:'Os dados cadastrados do responsável técnico serão incluídos automaticamente.'})[node.kind]}</p>`:''}${canEdit()?`<div class="row">${depth<6?btn('+ Subitem','reportAddChild','','sm'):''}${btn('↑ Subir','reportMoveUp','','sm')}${btn('↓ Descer','reportMoveDown','','sm')}${btn('Excluir tópico','reportDelete','','sm danger')}</div>`:''}`;
+  return `<h3>Conteúdo do tópico</h3><div class="field"><label for="rp-section-title">Título do tópico</label><input id="rp-section-title" maxlength="180" data-section-field="title" value="${esc(node.title)}" ${disabled}></div><div class="field"><label for="rp-section-kind">Conteúdo automático deste tópico</label><select id="rp-section-kind" data-section-field="kind" ${disabled}>${[['text','Somente o texto preenchido'],['photos','Ambientes, itens, constatações e fotos da inspeção'],['identification','Identificação do imóvel'],['technical','Dados do responsável técnico']].map(([value,label])=>`<option value="${value}" ${node.kind===value?'selected':''}>${label}</option>`).join('')}</select></div><label><input type="checkbox" data-section-field="enabled" ${node.enabled?'checked':''} ${disabled}> Incluir este tópico e seus subitens no laudo</label><div class="field" style="margin-top:12px"><label for="rp-section-body">Texto do tópico</label><textarea id="rp-section-body" data-section-field="body" ${disabled}>${esc(node.body)}</textarea></div>${node.kind!=='text'?`<p class="hint">${({photos:'As áreas, os itens, as constatações e as fotos desta inspeção serão incluídos automaticamente, na ordem cadastrada.',identification:'A identificação do empreendimento e o tipo do imóvel serão incluídos automaticamente.',technical:'Os dados cadastrados do responsável técnico serão incluídos automaticamente.'})[node.kind]}</p>`:''}${canEdit()?`<div class="row">${depth<6?btn('+ Subitem','reportAddChild','','sm'):''}${btn('↑ Subir','reportMoveUp','','sm')}${btn('↓ Descer','reportMoveDown','','sm')}${btn('Excluir tópico','reportDelete','','sm danger')}</div>`:''}`;
 }
 function renderWorkbench(){
   const host=$('#report-workbench');if(!host||!editor)return;
-  host.innerHTML=`<div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details><div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
+  const r=reportData(editor.inspection.id),photoCount=r.sections.reduce((n,a)=>n+a.items.reduce((n,i)=>n+i.photos.length,0),0);
+  const photoTopics=activePhotoTopics(editor.draft.sections);
+  host.innerHTML=`<p class="${photoCount&&!photoTopics.length?'alert':'hint'}">${photoCount} foto(s) cadastrada(s) nesta inspeção. ${photoTopics.length?'Inclusão automática em: '+photoTopics.map(n=>esc(n.title)).join(', ')+'.':'Para incluir as fotos no laudo, selecione um tópico e escolha “Ambientes, itens, constatações e fotos da inspeção” em “Conteúdo automático deste tópico”.'}</p><div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details><div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
 }
 function status(message,error=false){const node=$('#report-status');if(node){node.textContent=message;node.setAttribute('role',error?'alert':'status');}}
 function dirty(){editor.dirty=true;status('Há alterações ainda não salvas.');}
@@ -71,15 +83,17 @@ function openEditor(id){
   const r=reportData(id);state.inspectionId=id;
   for(const url of assets.values())URL.revokeObjectURL(url);assets.clear();
   const inherited=r.profile.reportTemplate?{...clone(r.profile.reportTemplate),propertyType:r.i.propertyType||r.condo?.propertyType||''}:null;
-  editor={inspection:r.i,draft:normalize(r.i.reportDoc||inherited,r),selected:null,busy:false,dirty:!r.i.reportDoc};editor.selected=editor.draft.sections[0]?.id;
+  editor={inspection:r.i,draft:normalize(r.i.reportDoc||inherited,r),selected:null,busy:false,dirty:!r.i.reportDoc||Number(r.i.reportDoc.version||1)<2};editor.selected=editor.draft.sections[0]?.id;
   modal('Editor do laudo — '+r.i.title,'<div id="report-workbench"></div><p id="report-status" class="re-status" role="status"></p><div id="report-preview"><p class="hint">Clique em Pré-visualizar páginas para conferir o sumário e a paginação.</p></div>',null,null,true);
   $('#modal-form').dataset.allowViewer='true';$('#modal-form').onsubmit=e=>{e.preventDefault();if(canEdit())run(saveDraft);};
   renderWorkbench();status(editor.dirty?'Modelo carregado. Salve para vinculá-lo a esta inspeção.':'Configurações do laudo carregadas.');
 }
+function activePhotoTopics(nodes){return nodes.flatMap(n=>n.enabled?[...(n.kind==='photos'?[n]:[]),...activePhotoTopics(n.children)]:[]);}
 function validateDraft(){
   const normalized=normalize(editor.draft,reportData(editor.inspection.id));
   if(!normalized.title.trim())throw Error('Preencha o título do laudo.');
   const check=nodes=>{for(const n of nodes){if(!n.enabled)continue;if(!n.title.trim())throw Error('Preencha o título de todos os tópicos incluídos.');check(n.children);}};check(normalized.sections);
+  if(activePhotoTopics(normalized.sections).length>1)throw Error('Escolha apenas um tópico para incluir automaticamente os ambientes, itens e fotografias, evitando fotos repetidas.');
   editor.draft=normalized;return normalized;
 }
 async function saveDraft(){
@@ -317,7 +331,7 @@ document.addEventListener('input',event=>{
   if(key){editor.draft[key]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}
   if(field){const found=findNode(editor.selected);if(found){found.node[field]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}}
 });
-document.addEventListener('change',event=>{if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
+document.addEventListener('change',event=>{if(event.target.dataset.sectionField==='kind'&&editor&&!editor.busy&&canEdit()){const found=findNode(editor.selected);if(found){found.node.kind=event.target.value;dirty();renderWorkbench();}return;}if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
 Object.assign(actionMap,{openReport:e=>openEditor(e.dataset.id),previewReport:preview,printReport:print,exportDocx:word,reportSave:()=>run(saveDraft),reportSaveTemplate:()=>run(saveTemplate),reportChoose:e=>choose(e.dataset.id),reportAddRoot:()=>addTopic(),reportAddChild:()=>addTopic(true),reportMoveUp:()=>moveTopic(-1),reportMoveDown:()=>moveTopic(1),reportDelete:removeTopic,reportReset:reset,orderAreas:showAreaOrder,areaOrderUp:e=>moveArea(e.dataset.id,-1),areaOrderDown:e=>moveArea(e.dataset.id,1)});
 reportModal=openEditor;previewReport=preview;printReport=print;exportDocx=word;
 window.ReportStudio={defaults,normalize,compose,buildPlan,makeDocx,ordered,open:openEditor,save:saveDraft,getDraft:()=>editor?.draft};
