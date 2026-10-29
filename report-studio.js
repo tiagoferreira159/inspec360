@@ -221,7 +221,7 @@ function blockNode(b,doc){
   const el=document.createElement(b.type==='heading'?'h'+b.level:b.type==='paragraph'?'p':'div');
   if(b.type==='heading'){el.textContent=b.text;if(b.anchor){el.id=b.anchor;el.dataset.anchor=b.anchor;}}
   if(b.type==='paragraph'){el.textContent=b.text;if(b.empty)el.className='rp-empty';if(b.style){el.style.color=b.style.color;el.style.fontSize=b.style.fontSize+'pt';}}
-  if(b.type==='topicImage'){el.className='rp-topic-image';el.style.textAlign=b.align;el.innerHTML=`<figure style="width:${b.width}mm"><img src="${esc(b.image)}" alt="${esc(b.caption||'Imagem do tópico')}" style="max-height:${b.height}mm"><figcaption>${esc(b.caption)}</figcaption></figure>`;}
+  if(b.type==='topicImage'){el.className='rp-topic-image';el.style.textAlign=b.align;el.innerHTML=`<figure style="width:${b.width}mm"><img src="${esc(b.image)}" alt="${esc(b.caption||'Imagem do tópico')}" style="height:${b.height}mm;max-height:${b.height}mm"><figcaption>${esc(b.caption)}</figcaption></figure>`;}
   if(b.type==='table'){el.className='rp-topic-table';el.innerHTML=`${b.caption?`<p class="rp-table-caption">${esc(b.caption)}</p>`:''}<table>${b.rows.map((row,i)=>`<${i===0&&b.header?'thead':'tbody'}><tr>${row.map(cell=>`<${i===0&&b.header?'th':'td'}>${esc(cell)}</${i===0&&b.header?'th':'td'}>`).join('')}</tr></${i===0&&b.header?'thead':'tbody'}>`).join('')}</table>`;}
   if(b.type==='toc'){
     el.className='rp-toc-row';el.style.paddingLeft=(Math.min(5,b.level-1)*4)+'mm';
