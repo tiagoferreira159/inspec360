@@ -72,3 +72,9 @@ Nenhum conteúdo de laudo, conclusão ou imagem de cliente foi criado/modificado
 - Editor permite escolher o conteúdo automático do tópico e informa quantidade de fotos cadastradas e onde serão incluídas. Validação impede dois tópicos fotográficos ativos para evitar repetição.
 - 20 testes automatizados aprovados. Chromium com API e imagens sintéticas reproduziu o caso legado: prévia e impressão com quatro fotos, texto preservado, seletor funcional e vínculo salvo. Word conferido com quatro imagens incorporadas; PDF conferido com quatro ocorrências de imagem.
 - Nenhuma alteração direta em laudos, textos ou fotos de produção; recuperação aplicada ao abrir/gerar o documento e persistida pelo fluxo normal de salvamento.
+
+## Foto de capa e logomarcas de cabeçalho/rodapé
+- Uploads independentes com validação de tipo/tamanho, conversão local, limites de dimensões, proporção e PNG com transparência para as marcas. Persistência no reportDoc já protegido pelo controle de revisão existente; nenhuma migração necessária.
+- 21 testes automatizados aprovados. Chromium com dados sintéticos verificou os três uploads, dimensões/alinhamento, salvamento/reabertura, remoção independente, acesso consulta e modelo padrão com logos sem foto do imóvel.
+- PDF de quatro páginas e Word renderizado em quatro páginas revisados visualmente. Foto central da capa e marcas em todas as páginas; margens reservadas sem sobreposição, três fotos de itens ainda presentes. Relações das imagens verificadas individualmente nas partes Word header1.xml e footer1.xml.
+- Testes usam somente imagens e dados sintéticos. Não foram adicionadas imagens do exemplo nem alterados laudos existentes no banco.

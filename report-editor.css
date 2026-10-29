@@ -34,3 +34,9 @@
  #print-host .rp-page:last-child{break-after:auto;page-break-after:auto}
  .rp-measure{display:none!important}
 }
+/* Imagens independentes da capa e identidade visual repetida nas páginas. */
+.re-image-control{padding:12px;border:1px solid #dbe3ee;border-radius:9px;background:#fff;min-width:0}.re-image-control h4{margin:0 0 10px}.re-image-control .btn{margin:0 6px 10px 0}.re-image-thumbnail{display:block;width:100%;height:95px;object-fit:contain;margin-bottom:10px;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 50%/16px 16px}.re-image-control input[type=file]{font-size:12px}
+.rp-page{padding-top:var(--rp-top,26mm);padding-bottom:var(--rp-bottom,23mm)}.rp-content{height:calc(297mm - var(--rp-top,26mm) - var(--rp-bottom,23mm))}
+.rp-header{top:7mm}.rp-footer{bottom:6mm;display:block}.rp-footer-line{display:flex;justify-content:space-between;gap:5mm}.rp-footer-line>span:first-child{min-width:0}
+.rp-brand-image{width:100%;margin:0 0 1mm;line-height:0}.rp-brand-image img{display:inline-block;max-width:100%;height:auto;max-height:12mm;object-fit:contain}.rp-footer .rp-brand-image img{max-height:10mm}
+.rp-cover-photo{justify-content:space-between;gap:5mm}.rp-cover-photo h1{font-size:var(--rp-heading-size)}.rp-cover-photo .rp-cover-image{width:100%;max-height:150mm;display:flex;align-items:center;justify-content:center;flex:0 1 auto;min-height:40mm}.rp-cover-photo .rp-cover-image img{width:150mm;height:100%;max-width:100%;max-height:100%;object-fit:contain}.rp-cover-details{width:100%;flex:0 0 auto}.rp-cover-details p,.rp-cover-details h2{text-align:inherit;margin:0 0 2mm}.rp-cover-details h2{font-size:var(--rp-h2)}

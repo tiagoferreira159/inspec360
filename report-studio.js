@@ -8,6 +8,9 @@ const ordered=arr=>arr.slice().sort((a,b)=>(Number(a.order)||0)-(Number(b.order)
 const color=(v,f)=>/^#[0-9a-f]{6}$/i.test(v||'')?v:f;
 const number=(v,min,max,f)=>Number.isFinite(Number(v))?Math.min(max,Math.max(min,Number(v))):f;
 const text=v=>String(v??'');
+const reportImage=v=>typeof v==='string'&&v.length<=1500000&&/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(v)?v:'';
+const align=v=>['left','center','right'].includes(v)?v:'center';
+const IMAGE_FIELDS=['coverImage','headerImage','footerImage'];
 let editor=null, areaDraft=null;
 const assets=new Map();
 function section(title,body='',kind='text'){return {id:uid(),title,body,kind,enabled:true,children:[]};}
@@ -19,7 +22,7 @@ function defaults(r){
   sections[5].kind='technical';
   sections[6].kind='photos';
   sections[7].body=r.profile.methodology||'';
-  return {version:2,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),toc:true,sections};
+  return {version:2,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),coverImage:'',coverImageHeight:125,coverDetailsAlign:'right',headerImage:'',headerImageWidth:45,headerImageAlign:'left',footerImage:'',footerImageWidth:100,footerImageAlign:'center',toc:true,sections};
 }
 function normalize(value,r){
   const base=defaults(r),raw=value&&typeof value==='object'?value:{};
@@ -30,6 +33,10 @@ function normalize(value,r){
   result.fontFamily=FONTS.includes(result.fontFamily)?result.fontFamily:'Arial';
   result.fontSize=number(result.fontSize,8,24,11);result.headingSize=number(result.headingSize,12,32,16);
   result.textColor=color(result.textColor,'#172638');result.headingColor=color(result.headingColor,'#12355b');result.toc=result.toc!==false;
+  for(const field of IMAGE_FIELDS)result[field]=reportImage(result[field]);
+  result.coverImageHeight=number(result.coverImageHeight,60,150,125);
+  result.coverDetailsAlign=align(result.coverDetailsAlign);
+  for(const part of ['header','footer']){result[part+'ImageWidth']=number(result[part+'ImageWidth'],15,176,part==='header'?45:100);result[part+'ImageAlign']=align(result[part+'ImageAlign']);}
   const ids=new Set();
   function nodes(list,depth=1){
     if(depth>6||!Array.isArray(list))return [];
@@ -59,9 +66,29 @@ function findNode(id,list=editor.draft.sections,parent=null,depth=1){
 }
 function optionField(key,label,type='text'){
   const value=editor.draft[key],disabled=canEdit()?'':'disabled';
+  if(key.endsWith('Align'))return `<div class="field"><label for="rp-${key}">${label}</label><select id="rp-${key}" data-report-option="${key}" ${disabled}>${[['left','À esquerda'],['center','Centralizado'],['right','À direita']].map(([v,label])=>`<option value="${v}" ${v===value?'selected':''}>${label}</option>`).join('')}</select></div>`;
   if(key==='fontFamily')return `<div class="field"><label for="rp-${key}">${label}</label><select id="rp-${key}" data-report-option="${key}" ${disabled}>${FONTS.map(v=>`<option ${v===value?'selected':''}>${v}</option>`).join('')}</select></div>`;
   if(key==='columns')return `<div class="field"><label for="rp-columns">${label}</label><select id="rp-columns" data-report-option="columns" ${disabled}>${[1,2,3].map(v=>`<option value="${v}" ${Number(value)===v?'selected':''}>${v} foto${v>1?'s':''} por linha</option>`).join('')}</select></div>`;
-  return `<div class="field"><label for="rp-${key}">${label}</label><input id="rp-${key}" data-report-option="${key}" type="${type}" value="${esc(value)}" ${type==='number'?`min="${key==='fontSize'?8:12}" max="${key==='fontSize'?24:32}" step="1"`:''} ${['title','propertyType','header','footer'].includes(key)?`maxlength="${key==='title'?250:150}"`:''} ${disabled}></div>`;
+  return `<div class="field"><label for="rp-${key}">${label}</label><input id="rp-${key}" data-report-option="${key}" type="${type}" value="${esc(value)}" ${type==='number'?`min="${key==='fontSize'?8:key==='coverImageHeight'?60:key.endsWith('Width')?15:12}" max="${key==='fontSize'?24:key==='coverImageHeight'?150:key.endsWith('Width')?176:32}" step="1"`:''} ${['title','propertyType','header','footer'].includes(key)?`maxlength="${key==='title'?250:150}"`:''} ${disabled}></div>`;
+}
+function imageControl(key,title){
+  const value=editor.draft[key],disabled=canEdit()?'':'disabled';
+  return `<section class="re-image-control"><h4>${title}</h4>${value?`<img class="re-image-thumbnail" src="${esc(value)}" alt="${title}">`:'<p class="hint">Nenhuma imagem selecionada.</p>'}<label class="field"><span>Selecionar imagem (PNG, JPEG ou WebP, até 10 MB)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-report-image="${key}" ${disabled}></label>${canEdit()?`${value?btn('Remover imagem','reportRemoveImage',`data-field="${key}"`,'sm'):''}${key!=='coverImage'&&reportImage(reportData(editor.inspection.id).profile.logo)?btn('Usar logo das configurações','reportUseProfileLogo',`data-field="${key}"`,'sm'):''}`:''}${key==='coverImage'?`${optionField('coverImageHeight','Altura máxima da foto na capa (mm)','number')}${optionField('coverDetailsAlign','Alinhamento dos dados da capa')}`:`${optionField(key+'Width','Largura máxima da imagem (mm)','number')}${optionField(key+'Align','Alinhamento da imagem')}`}</section>`;
+}
+async function uploadReportImage(key,file){
+  if(!canEdit()||!IMAGE_FIELDS.includes(key)||!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('Use uma imagem PNG, JPEG ou WebP.');
+  if(file.size>10*1024*1024)throw Error('Selecione uma imagem com até 10 MB.');
+  const bitmap=await createImageBitmap(file);
+  try{
+    if(!bitmap.width||!bitmap.height)throw Error('Imagem inválida.');
+    const max=key==='coverImage'?1600:2000,ratio=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
+    const ctx=canvas.getContext('2d');if(key==='coverImage'){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);}ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const value=canvas.toDataURL(key==='coverImage'?'image/jpeg':'image/png',.86);
+    if(!reportImage(value))throw Error('A imagem ficou muito grande. Reduza sua resolução antes de enviar.');
+    editor.draft[key]=value;dirty();
+  }finally{bitmap.close();}
 }
 function outlineHTML(nodes=editor.draft.sections,depth=1,prefix=''){
   return nodes.map((n,i)=>{const label=prefix+(i+1);return `<button type="button" data-action="reportChoose" data-id="${esc(n.id)}" aria-current="${editor.selected===n.id}" style="padding-left:${8+(depth-1)*13}px" class="${n.enabled?'':'re-excluded'}">${label}. ${esc(n.title||'Sem título')}</button>${outlineHTML(n.children,depth+1,label+'.')}`;}).join('');
@@ -75,7 +102,7 @@ function renderWorkbench(){
   const host=$('#report-workbench');if(!host||!editor)return;
   const r=reportData(editor.inspection.id),photoCount=r.sections.reduce((n,a)=>n+a.items.reduce((n,i)=>n+i.photos.length,0),0);
   const photoTopics=activePhotoTopics(editor.draft.sections);
-  host.innerHTML=`<p class="${photoCount&&!photoTopics.length?'alert':'hint'}">${photoCount} foto(s) cadastrada(s) nesta inspeção. ${photoTopics.length?'Inclusão automática em: '+photoTopics.map(n=>esc(n.title)).join(', ')+'.':'Para incluir as fotos no laudo, selecione um tópico e escolha “Ambientes, itens, constatações e fotos da inspeção” em “Conteúdo automático deste tópico”.'}</p><div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details><div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
+  host.innerHTML=`<p class="${photoCount&&!photoTopics.length?'alert':'hint'}">${photoCount} foto(s) cadastrada(s) nesta inspeção. ${photoTopics.length?'Inclusão automática em: '+photoTopics.map(n=>esc(n.title)).join(', ')+'.':'Para incluir as fotos no laudo, selecione um tópico e escolha “Ambientes, itens, constatações e fotos da inspeção” em “Conteúdo automático deste tópico”.'}</p><div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options re-branding"><summary>Imagens da capa, cabeçalho e rodapé</summary><p class="hint">As imagens são salvas com este laudo. A foto da capa aparece no centro da primeira página. Cabeçalho e rodapé aparecem em todas as páginas, com proporção preservada. Use uma imagem horizontal para faixas com contatos. Ao salvar como modelo padrão, as logomarcas são reutilizadas; a foto do imóvel permanece exclusiva desta inspeção.</p><div class="grid3">${imageControl('coverImage','Foto central da capa')}${imageControl('headerImage','Logomarca ou faixa do cabeçalho')}${imageControl('footerImage','Logomarca ou faixa do rodapé')}</div></details><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details><div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
 }
 function status(message,error=false){const node=$('#report-status');if(node){node.textContent=message;node.setAttribute('role',error?'alert':'status');}}
 function dirty(){editor.dirty=true;status('Há alterações ainda não salvas.');}
@@ -118,7 +145,7 @@ function removeTopic(){if(!canEdit())return;const f=findNode(editor.selected);if
 async function saveTemplate(){
   if(!isAdmin())throw Error('Somente administrador.');validateDraft();
   const profile=by('settings','profile')||{id:'profile'};
-  const template=clone(editor.draft);template.propertyType='';
+  const template=clone(editor.draft);template.propertyType='';template.coverImage='';
   await put('settings',{...profile,reportTemplate:template});await load();status('Modelo padrão salvo. Será aplicado a inspeções sem laudo configurado.');
 }
 function reset(){if(!canEdit()||!confirm('Substituir os tópicos e a formatação deste laudo pelo padrão inicial? Você poderá revisar antes de salvar.'))return;editor.draft=defaults(reportData(editor.inspection.id));editor.selected=editor.draft.sections[0]?.id;dirty();renderWorkbench();}
@@ -156,7 +183,7 @@ function compose(r,doc){
   }
   walk(doc.sections);return blocks;
 }
-function variables(doc){return `--rp-font:'${doc.fontFamily}';--rp-size:${doc.fontSize}pt;--rp-color:${doc.textColor};--rp-heading-color:${doc.headingColor};--rp-heading-size:${doc.headingSize}pt;--rp-h2:${Math.max(doc.fontSize,doc.headingSize-2)}pt;--rp-h3:${Math.max(doc.fontSize,doc.headingSize-4)}pt;--rp-cover-size:${Math.min(32,doc.headingSize+10)}pt;--rp-caption-size:${Math.max(8,Math.min(13,doc.fontSize-1))}pt;`;}
+function variables(doc){return `--rp-top:${doc.headerImage?32:26}mm;--rp-bottom:${doc.footerImage?31:23}mm;--rp-font:'${doc.fontFamily}';--rp-size:${doc.fontSize}pt;--rp-color:${doc.textColor};--rp-heading-color:${doc.headingColor};--rp-heading-size:${doc.headingSize}pt;--rp-h2:${Math.max(doc.fontSize,doc.headingSize-2)}pt;--rp-h3:${Math.max(doc.fontSize,doc.headingSize-4)}pt;--rp-cover-size:${Math.min(32,doc.headingSize+10)}pt;--rp-caption-size:${Math.max(8,Math.min(13,doc.fontSize-1))}pt;`;}
 function blockNode(b,doc){
   const el=document.createElement(b.type==='heading'?'h'+b.level:b.type==='paragraph'?'p':'div');
   if(b.type==='heading'){el.textContent=b.text;if(b.anchor){el.id=b.anchor;el.dataset.anchor=b.anchor;}}
@@ -204,7 +231,15 @@ function paginate(blocks,doc,host){
   }
   return pages;
 }
-function coverNode(r,doc){const el=document.createElement('div');el.className='rp-cover';el.innerHTML=`${r.profile.logo?`<img src="${esc(r.profile.logo)}" alt="Logomarca">`:'<strong>INSPEC360</strong>'}<h1>${esc(doc.title)}</h1><h2>${esc(r.condo?.name||'Empreendimento')}</h2><p><b>Tipo do imóvel:</b> ${esc(doc.propertyType||'Não informado')}</p><p>${esc([r.condo?.address,r.condo?.city,r.condo?.state].filter(Boolean).join(' · '))}</p><p>${esc(r.i.title)}</p><p>Data de referência: ${esc(dateStr(r.i.date))}</p><p>Responsável técnico: ${esc(r.i.engineer||r.profile.engineer||'Não informado')}<br>Registro profissional: ${esc(r.i.crea||r.profile.crea||'Não informado')}</p>`;return el;}
+function coverNode(r,doc){
+ const el=document.createElement('div');el.className='rp-cover'+(doc.coverImage?' rp-cover-photo':'');
+ const address=[r.condo?.address,r.condo?.city,r.condo?.state].filter(Boolean).join(' · ');
+ const details=`<p><b>Tipo do imóvel:</b> ${esc(doc.propertyType||'Não informado')}</p><h2>${esc(r.condo?.name||'Empreendimento')}</h2><p>${esc(address)}</p><p>${esc(r.i.title)}</p><p>Data de referência: ${esc(dateStr(r.i.date))}</p><p>Responsável técnico: ${esc(r.i.engineer||r.profile.engineer||'Não informado')}<br>Registro profissional: ${esc(r.i.crea||r.profile.crea||'Não informado')}</p>`;
+ if(doc.coverImage){el.innerHTML=`<h1>${esc(doc.title)}</h1><div class="rp-cover-image" style="height:${doc.coverImageHeight}mm"><img src="${esc(doc.coverImage)}" alt="Imagem de capa do imóvel"></div><div class="rp-cover-details" style="text-align:${doc.coverDetailsAlign}">${details}</div>`;}
+ else el.innerHTML=`${r.profile.logo?`<img src="${esc(r.profile.logo)}" alt="Logomarca">`:'<strong>INSPEC360</strong>'}<h1>${esc(doc.title)}</h1>${details}`;
+ return el;
+}
+function brandImage(doc,part){const value=doc[part+'Image'];return value?`<div class="rp-brand-image" style="text-align:${doc[part+'ImageAlign']}"><img src="${esc(value)}" alt="${part==='header'?'Logomarca do cabeçalho':'Logomarca do rodapé'}" style="width:${doc[part+'ImageWidth']}mm"></div>`:'';}
 async function buildPlan(r,input){
   const doc=normalize(input,r);await document.fonts?.ready;
   const host=document.createElement('div');host.className='rp-measure';document.body.append(host);
@@ -225,8 +260,8 @@ async function buildPlan(r,input){
     const pages=[cover,...tocPages,...bodyPages],pageMap={};
     pages.forEach((p,index)=>{
       p.number=index+1;p.page.dataset.page=String(index+1);
-      const head=document.createElement('header');head.className='rp-header';head.textContent=doc.header;
-      const foot=document.createElement('footer');foot.className='rp-footer';foot.innerHTML=`<span>${esc(doc.footer)}</span><span class="rp-counter">Página ${index+1} de ${pages.length}</span>`;
+      const head=document.createElement('header');head.className='rp-header';head.innerHTML=brandImage(doc,'header')+`<div>${esc(doc.header)}</div>`;
+      const foot=document.createElement('footer');foot.className='rp-footer';foot.innerHTML=brandImage(doc,'footer')+`<div class="rp-footer-line"><span>${esc(doc.footer)}</span><span class="rp-counter">Página ${index+1} de ${pages.length}</span></div>`;
       p.page.prepend(head);p.page.append(foot);p.blocks.forEach(b=>{if(b.anchor&&b.type==='heading')pageMap[b.anchor]=index+1;});
     });
     const container=document.createElement('div');container.className='rp-pages';for(const p of pages)container.append(p.page);
@@ -244,12 +279,12 @@ function wrun(value,props=''){return `<w:r>${props?'<w:rPr>'+props+'</w:rPr>':''
 function wp(value,style='Normal',extra=''){return `<w:p><w:pPr><w:pStyle w:val="${style}"/>${extra}</w:pPr>${wrun(value)}</w:p>`;}
 function wfield(instruction,cached,props=''){return `<w:fldSimple w:instr="${wx(instruction)}">${wrun(cached,props)}</w:fldSimple>`;}
 async function makeDocx(plan){
-  const {r,doc,pages}=plan,zip=new ZipStore(),rels=[],media=new Map();let imageIndex=0,markIndex=0;
-  async function photoImage(blob,key,maxWidth,maxHeight){
-    let entry=media.get(key);
-    if(!entry){const converted=await convertedPhoto(blob),bitmap=await createImageBitmap(converted.blob);entry={rid:'rImg'+(++imageIndex),idx:imageIndex,width:bitmap.width,height:bitmap.height,name:'image'+imageIndex+'.'+converted.ext};bitmap.close();zip.add('word/media/'+entry.name,new Uint8Array(await converted.blob.arrayBuffer()));rels.push(`<Relationship Id="${entry.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${entry.name}"/>`);media.set(key,entry);}
-    const scale=Math.min(maxWidth/entry.width,maxHeight/entry.height,1);
-    return imageDrawing(entry.rid,entry.idx,Math.max(1,entry.width*scale),Math.max(1,entry.height*scale)).replace('<w:pPr>','<w:pPr><w:spacing w:before="0" w:after="0"/>');
+  const {r,doc,pages}=plan,zip=new ZipStore(),rels=[],media=new Map(),partRels={document:rels,header:[],footer:[]};let imageIndex=0,markIndex=0;
+  async function photoImage(blob,key,maxWidth,maxHeight,alignment='center',owner='document',upscale=false){
+    key=owner+':'+key;let entry=media.get(key);
+    if(!entry){const converted=await convertedPhoto(blob),bitmap=await createImageBitmap(converted.blob);entry={rid:'rImg'+(++imageIndex),idx:imageIndex,width:bitmap.width,height:bitmap.height,name:'image'+imageIndex+'.'+converted.ext};bitmap.close();zip.add('word/media/'+entry.name,new Uint8Array(await converted.blob.arrayBuffer()));partRels[owner].push(`<Relationship Id="${entry.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${entry.name}"/>`);media.set(key,entry);}
+    const scale=Math.min(maxWidth/entry.width,maxHeight/entry.height,upscale?Infinity:1);
+    return imageDrawing(entry.rid,entry.idx,Math.max(1,entry.width*scale),Math.max(1,entry.height*scale)).replace('<w:pPr>','<w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>').replace('<w:jc w:val="center"/>',`<w:jc w:val="${alignment}"/>`);
   }
   let body='',tocStarted=false,tocEnded=false;
   // O Word usa sua paginação nativa; o sumário é um campo atualizável do documento.
@@ -260,10 +295,12 @@ async function makeDocx(plan){
     const page=wordPages[pageIndex];
     for(const b of page.blocks){
       if(b.type==='cover'){
-        body+=wp('','Normal','<w:spacing w:before="900"/>');
-        if(r.profile.logo){const mime=r.profile.logo.slice(5,r.profile.logo.indexOf(';')),blob=base64ToBlob(r.profile.logo.split(',')[1],mime);body+=await photoImage(blob,'logo',300,110);}
-        body+=wp(doc.title,'Title','<w:jc w:val="center"/>')+wp(r.condo?.name||'Empreendimento','Subtitle','<w:jc w:val="center"/>');
-        for(const line of ['Tipo do imóvel: '+(doc.propertyType||'Não informado'),[r.condo?.address,r.condo?.city,r.condo?.state].filter(Boolean).join(' · '),r.i.title,'Data de referência: '+dateStr(r.i.date),'Responsável técnico: '+(r.i.engineer||r.profile.engineer||'Não informado'),'Registro profissional: '+(r.i.crea||r.profile.crea||'Não informado')])body+=wp(line,'Normal','<w:jc w:val="center"/>');
+        const alignment=doc.coverImage?doc.coverDetailsAlign:'center';
+        if(!doc.coverImage){body+=wp('','Normal','<w:spacing w:before="900"/>');if(r.profile.logo){const mime=r.profile.logo.slice(5,r.profile.logo.indexOf(';')),blob=base64ToBlob(r.profile.logo.split(',')[1],mime);body+=await photoImage(blob,'logo',300,110);}}
+        body+=wp(doc.title,'Title','<w:jc w:val="center"/>');
+        if(doc.coverImage){const blob=base64ToBlob(doc.coverImage.split(',')[1],doc.coverImage.slice(5,doc.coverImage.indexOf(';')));body+=await photoImage(blob,'cover-photo',150*96/25.4,doc.coverImageHeight*96/25.4,'center','document',true);}
+        body+=wp('Tipo do imóvel: '+(doc.propertyType||'Não informado'),'Normal',`<w:jc w:val="${alignment}"/>`)+wp(r.condo?.name||'Empreendimento','Subtitle',`<w:jc w:val="${alignment}"/>`);
+        for(const line of [[r.condo?.address,r.condo?.city,r.condo?.state].filter(Boolean).join(' · '),r.i.title,'Data de referência: '+dateStr(r.i.date),'Responsável técnico: '+(r.i.engineer||r.profile.engineer||'Não informado'),'Registro profissional: '+(r.i.crea||r.profile.crea||'Não informado')])body+=wp(line,'Normal',`<w:jc w:val="${alignment}"/>`);
       }
       if(b.type==='heading'){
         const style=b.text==='Sumário'?'TOCTitle':'Heading'+b.level;
@@ -290,7 +327,7 @@ async function makeDocx(plan){
     if(pageIndex<wordPages.length-1)body+=breakPage;
   }
   const ns='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
-  const sect='<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/><w:footerReference w:type="default" r:id="rFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1474" w:right="964" w:bottom="1304" w:left="964" w:header="567" w:footer="454"/><w:pgNumType w:start="1"/></w:sectPr>';
+  const sect=`<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/><w:footerReference w:type="default" r:id="rFooter"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="${doc.headerImage?1814:1474}" w:right="964" w:bottom="${doc.footerImage?1757:1304}" w:left="964" w:header="397" w:footer="340"/><w:pgNumType w:start="1"/></w:sectPr>`;
   zip.add('word/document.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:document ${ns}><w:body>${body}${sect}</w:body></w:document>`));
   const baseR=`<w:rFonts w:ascii="${wx(doc.fontFamily)}" w:hAnsi="${wx(doc.fontFamily)}" w:cs="${wx(doc.fontFamily)}"/><w:sz w:val="${Math.round(doc.fontSize*2)}"/><w:color w:val="${doc.textColor.slice(1)}"/><w:lang w:val="pt-BR"/>`;
   let styles=`<w:docDefaults><w:rPrDefault><w:rPr>${baseR}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="348" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`;
@@ -304,8 +341,11 @@ async function makeDocx(plan){
   zip.add('word/styles.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:styles ${ns}>${styles}</w:styles>`));
   zip.add('word/settings.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:settings ${ns}><w:updateFields w:val="true"/></w:settings>`));
   const small='<w:sz w:val="18"/>';
-  zip.add('word/header1.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:hdr ${ns}><w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:color="${doc.headingColor.slice(1)}"/></w:pBdr></w:pPr>${wrun(doc.header,small)}</w:p></w:hdr>`));
-  zip.add('word/footer1.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:ftr ${ns}><w:tbl><w:tblPr><w:tblW w:w="9978" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="7500"/><w:gridCol w:w="2478"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="7500" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="240"/></w:pPr>${wrun(doc.footer,small)}</w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="2478" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/><w:spacing w:after="0" w:line="240"/></w:pPr>${wrun('Página ',small)}${wfield('PAGE',1,small)}${wrun(' de ',small)}${wfield('NUMPAGES',pages.length,small)}</w:p></w:tc></w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:t></w:t></w:r></w:p></w:ftr>`));
+  const partImage=async part=>{const value=doc[part+'Image'];return value?photoImage(base64ToBlob(value.split(',')[1],value.slice(5,value.indexOf(';'))),part+'-brand',doc[part+'ImageWidth']*96/25.4,(part==='header'?12:10)*96/25.4,doc[part+'ImageAlign'],part,true):'';};
+  const headerLogo=await partImage('header'),footerLogo=await partImage('footer');
+  for(const part of ['header','footer'])if(partRels[part].length)zip.add('word/_rels/'+part+'1.xml.rels',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${partRels[part].join('')}</Relationships>`));
+  zip.add('word/header1.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:hdr ${ns}>${headerLogo}<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:color="${doc.headingColor.slice(1)}"/></w:pBdr></w:pPr>${wrun(doc.header,small)}</w:p></w:hdr>`));
+  zip.add('word/footer1.xml',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><w:ftr ${ns}>${footerLogo}<w:tbl><w:tblPr><w:tblW w:w="9978" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="7500"/><w:gridCol w:w="2478"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="7500" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="240"/></w:pPr>${wrun(doc.footer,small)}</w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="2478" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:jc w:val="right"/><w:spacing w:after="0" w:line="240"/></w:pPr>${wrun('Página ',small)}${wfield('PAGE',1,small)}${wrun(' de ',small)}${wfield('NUMPAGES',pages.length,small)}</w:p></w:tc></w:tr></w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr><w:r><w:rPr><w:sz w:val="2"/></w:rPr><w:t></w:t></w:r></w:p></w:ftr>`));
   const relation=(id,type,target)=>`<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
   zip.add('word/_rels/document.xml.rels',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relation('rStyles','styles','styles.xml')}${relation('rSettings','settings','settings.xml')}${relation('rHeader','header','header1.xml')}${relation('rFooter','footer','footer1.xml')}${rels.join('')}</Relationships>`));
   zip.add('_rels/.rels',enc.encode(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relation('rDoc','officeDocument','word/document.xml')}</Relationships>`));
@@ -331,8 +371,8 @@ document.addEventListener('input',event=>{
   if(key){editor.draft[key]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}
   if(field){const found=findNode(editor.selected);if(found){found.node[field]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}}
 });
-document.addEventListener('change',event=>{if(event.target.dataset.sectionField==='kind'&&editor&&!editor.busy&&canEdit()){const found=findNode(editor.selected);if(found){found.node.kind=event.target.value;dirty();renderWorkbench();}return;}if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
-Object.assign(actionMap,{openReport:e=>openEditor(e.dataset.id),previewReport:preview,printReport:print,exportDocx:word,reportSave:()=>run(saveDraft),reportSaveTemplate:()=>run(saveTemplate),reportChoose:e=>choose(e.dataset.id),reportAddRoot:()=>addTopic(),reportAddChild:()=>addTopic(true),reportMoveUp:()=>moveTopic(-1),reportMoveDown:()=>moveTopic(1),reportDelete:removeTopic,reportReset:reset,orderAreas:showAreaOrder,areaOrderUp:e=>moveArea(e.dataset.id,-1),areaOrderDown:e=>moveArea(e.dataset.id,1)});
+document.addEventListener('change',event=>{if(event.target.dataset.reportImage){const key=event.target.dataset.reportImage,file=event.target.files?.[0];if(editor&&!editor.busy&&canEdit()&&file)run(()=>uploadReportImage(key,file));return;}if(event.target.dataset.sectionField==='kind'&&editor&&!editor.busy&&canEdit()){const found=findNode(editor.selected);if(found){found.node.kind=event.target.value;dirty();renderWorkbench();}return;}if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
+Object.assign(actionMap,{reportRemoveImage:e=>{if(editor&&!editor.busy&&canEdit()&&IMAGE_FIELDS.includes(e.dataset.field)){editor.draft[e.dataset.field]='';dirty();renderWorkbench();}},reportUseProfileLogo:e=>{if(editor&&!editor.busy&&canEdit()&&['headerImage','footerImage'].includes(e.dataset.field)){editor.draft[e.dataset.field]=reportImage(reportData(editor.inspection.id).profile.logo);dirty();renderWorkbench();}},openReport:e=>openEditor(e.dataset.id),previewReport:preview,printReport:print,exportDocx:word,reportSave:()=>run(saveDraft),reportSaveTemplate:()=>run(saveTemplate),reportChoose:e=>choose(e.dataset.id),reportAddRoot:()=>addTopic(),reportAddChild:()=>addTopic(true),reportMoveUp:()=>moveTopic(-1),reportMoveDown:()=>moveTopic(1),reportDelete:removeTopic,reportReset:reset,orderAreas:showAreaOrder,areaOrderUp:e=>moveArea(e.dataset.id,-1),areaOrderDown:e=>moveArea(e.dataset.id,1)});
 reportModal=openEditor;previewReport=preview;printReport=print;exportDocx=word;
 window.ReportStudio={defaults,normalize,compose,buildPlan,makeDocx,ordered,open:openEditor,save:saveDraft,getDraft:()=>editor?.draft};
 })();

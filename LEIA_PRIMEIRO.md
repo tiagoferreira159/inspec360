@@ -168,3 +168,11 @@ Em **Modelos e listas**, o administrador pode criar um modelo vazio ou duplicar 
 Em uma inspeção, **Aplicar modelo** permite escolher qualquer modelo cadastrado. Também é possível escolher a inspeção diretamente na tela de modelos. A aplicação acrescenta ambientes e itens ausentes, compara nomes sem diferenciar maiúsculas e espaços nas extremidades, mantém a ordem existente e preserva avaliações e fotos. A estrutura do modelo é copiada: edições ou exclusões posteriores do modelo não alteram inspeções já criadas. Engenheiros/editores podem aplicar; usuários de consulta podem visualizar; administrar modelos requer perfil Administrador.
 
 Os modelos são registros individuais `settings` com `type: inspectionTemplate`, protegidos pelas políticas existentes e pelo controle de revisão. A gravação de um modelo não substitui as configurações gerais nem o modelo do laudo. Se a conexão interromper a aplicação, é possível repetir para concluir os itens ausentes.
+
+### Foto na capa e logomarcas nas páginas
+No editor do laudo, expanda **Imagens da capa, cabeçalho e rodapé**. Selecione uma imagem em cada posição desejada:
+- **Foto central da capa**: foto do imóvel no centro da primeira página, título acima e identificação abaixo; ajuste a altura máxima e o alinhamento dos dados.
+- **Logomarca ou faixa do cabeçalho**: repetida em todas as páginas; configure largura máxima e alinhamento.
+- **Logomarca ou faixa do rodapé**: repetida em todas as páginas, acima do texto e da numeração. Uma faixa horizontal pode conter logomarca, telefone e contatos, como no modelo de referência.
+
+Aceita PNG, JPEG e WebP de até 10 MB. As imagens são preparadas para o documento, preservando as proporções; logos preservam transparência. É possível remover ou substituir qualquer uma e, quando houver logo nas configurações gerais, reutilizá-la no cabeçalho/rodapé. Clique em **Salvar laudo** para gravar; depois use a prévia, PDF ou Word. A imagem da capa pertence à inspeção; **Salvar como modelo padrão** reutiliza as logomarcas e a formatação sem copiar a foto do imóvel para outras inspeções.

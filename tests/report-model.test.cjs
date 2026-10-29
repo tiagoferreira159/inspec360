@@ -49,3 +49,10 @@ test('migração não duplica vínculo existente e respeita exclusões e escolha
  raw.sections[1].enabled=false;assert.equal(studio.normalize(raw,r).sections[0].kind,'text');
  raw.version=2;raw.sections=raw.sections.slice(0,1);assert.equal(studio.normalize(raw,r).sections[0].kind,'text');
 });
+
+test('imagens da capa e marcas aceitam apenas dados de imagens e limitam dimensões e alinhamento',()=>{
+ const r=data(),image='data:image/png;base64,aGVsbG8=';
+ const doc=studio.normalize({coverImage:image,headerImage:'https://example.test/logo.png',footerImage:'data:image/svg+xml;base64,aGVsbG8=',coverImageHeight:999,headerImageWidth:999,footerImageWidth:-1,headerImageAlign:'left;display:none',footerImageAlign:'right'},r);
+ assert.equal(doc.coverImage,image);assert.equal(doc.headerImage,'');assert.equal(doc.footerImage,'');assert.equal(doc.coverImageHeight,150);assert.equal(doc.headerImageWidth,176);assert.equal(doc.footerImageWidth,15);assert.equal(doc.headerImageAlign,'center');assert.equal(doc.footerImageAlign,'right');
+ const old=studio.normalize({version:2,sections:studio.defaults(r).sections},r);assert.equal(old.coverImage,'');assert.equal(old.headerImage,'');assert.equal(old.footerImage,'');
+});
