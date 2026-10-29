@@ -56,3 +56,21 @@ test('imagens da capa e marcas aceitam apenas dados de imagens e limitam dimens�
  assert.equal(doc.coverImage,image);assert.equal(doc.headerImage,'');assert.equal(doc.footerImage,'');assert.equal(doc.coverImageHeight,150);assert.equal(doc.headerImageWidth,176);assert.equal(doc.footerImageWidth,15);assert.equal(doc.headerImageAlign,'center');assert.equal(doc.footerImageAlign,'right');
  const old=studio.normalize({version:2,sections:studio.defaults(r).sections},r);assert.equal(old.coverImage,'');assert.equal(old.headerImage,'');assert.equal(old.footerImage,'');
 });
+
+test('prioridades exibem números sem alterar valores antigos',()=>{
+ for(const [raw,label] of [['Crítica','0 - Crítica'],['Alta','1 - Alta'],['Média','2 - Média'],['Baixa','3 - Baixa'],['','Não definida'],['2 - Média','2 - Média']])assert.equal(context.priorityLabel(raw),label);
+ assert.equal(context.priorityValue('1 - Alta'),'Alta');
+});
+test('notas não recebem prefixo e classificação controla estilo de toda a constatação',()=>{
+ const r=data();r.sections=[{area:{id:'a',name:'A'},items:[{item:{id:'i',name:'I',status:'Conforme',notes:'Nome do responsável\nData da vistoria'},photos:[],findings:[{title:'Trinca',description:'Descrição técnica',classification:'Anomalia',priority:'Alta',recommendation:'Reparar'}]}]}];
+ const doc=studio.normalize({findingStyles:{Anomalia:{color:'#ff0000',fontSize:17}}},r),blocks=studio.compose(r,doc);
+ assert(blocks.some(b=>b.text==='Nome do responsável'));assert(!blocks.some(b=>b.text?.startsWith('Observações:')));
+ const finding=blocks.find(b=>b.text==='Trinca');assert.deepEqual(plain(finding.style),{color:'#ff0000',fontSize:17});assert.equal(blocks.find(b=>b.text==='Prioridade: 1 - Alta').style.fontSize,17);
+});
+test('imagens e tabelas dos tópicos são preservadas e compostas na ordem, sem HTML executável',()=>{
+ const r=data(),doc=studio.normalize({sections:[{id:'topic',title:'Detalhes',body:'Antes',kind:'text',enabled:true,content:[{id:'im',type:'image',image:'data:image/png;base64,aGVsbG8=',caption:'Legenda',width:900,height:900},{id:'t',type:'table',header:true,rows:[['Nome','Valor'],['<script>','2']]},{id:'tx',type:'text',text:'Depois'}],children:[]}]},r);
+ assert.equal(doc.sections[0].content[0].height,160);assert.equal(doc.sections[0].content[0].width,176);
+ const blocks=studio.compose(r,doc);assert.deepEqual(plain(blocks.map(b=>b.type)),['heading','paragraph','topicImage','table','paragraph']);assert.equal(blocks[3].rows[1][0],'<script>');assert.equal(blocks[4].text,'Depois');
+ const normalized=studio.normalize({sections:[{title:'Tabela',content:[{type:'table',rows:[['a','b'],['c']]},{type:'image',image:'https://invalid.test/img.jpg'},{type:'html',html:'<script>'}]}]},r);
+ assert.deepEqual(plain(normalized.sections[0].content[0].rows),[['a','b'],['c','']]);assert.equal(normalized.sections[0].content.length,2);assert.equal(normalized.sections[0].content[1].image,'');
+});

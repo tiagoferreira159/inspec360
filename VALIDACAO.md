@@ -78,3 +78,10 @@ Nenhum conteúdo de laudo, conclusão ou imagem de cliente foi criado/modificado
 - 21 testes automatizados aprovados. Chromium com dados sintéticos verificou os três uploads, dimensões/alinhamento, salvamento/reabertura, remoção independente, acesso consulta e modelo padrão com logos sem foto do imóvel.
 - PDF de quatro páginas e Word renderizado em quatro páginas revisados visualmente. Foto central da capa e marcas em todas as páginas; margens reservadas sem sobreposição, três fotos de itens ainda presentes. Relações das imagens verificadas individualmente nas partes Word header1.xml e footer1.xml.
 - Testes usam somente imagens e dados sintéticos. Não foram adicionadas imagens do exemplo nem alterados laudos existentes no banco.
+
+## Conteúdo dos tópicos, estilos por classificação e prioridades
+- 24 testes automatizados aprovados; sanitização de imagens e conteúdo, preservação da ordem dos blocos, células irregulares normalizadas, estilos validados e valores antigos de prioridade compatíveis.
+- Chromium com dados sintéticos: inserção/edição de tabela, adição de linha, imagem com legenda, texto adicional, ordenação, gravação/reabertura, cor/tamanho por classificação, notas sem prefixo e prioridades numeradas. Consulta não recebe controles de edição.
+- Tabela de 70 linhas na prévia distribuída em várias páginas, sem perda de linhas, com cabeçalhos repetidos e referências do sumário conferidas.
+- PDF e Word renderizado de quatro páginas revisados visualmente. Documento Word com tabela nativa editável, imagem do tópico e três fotos do item incorporadas, cores/tamanhos e prioridades verificados no XML e no resultado visual.
+- Nenhuma migração ou modificação direta de dados de produção. Conteúdo é persistido nos registros do laudo pelo fluxo existente de gravação e revisão.
