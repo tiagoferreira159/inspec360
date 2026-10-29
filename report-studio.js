@@ -1,4 +1,7 @@
 /* Editor e paginação do laudo. Dados persistidos em inspections.payload.reportDoc. */
+function priorityValue(value){const name=String(value??'').replace(/^\s*[0-3]\s*[-–]\s*/,'').trim();return ['Crítica','Alta','Média','Baixa'].includes(name)?name:'Não definida';}
+function priorityLabel(value){const name=priorityValue(value),n=['Crítica','Alta','Média','Baixa'].indexOf(name);return n<0?'Não definida':n+' - '+name;}
+function priorityChoices(){return ['Crítica','Alta','Média','Baixa','Não definida'].map(v=>[v,priorityLabel(v)]);}
 (() => {
 'use strict';
 const FONTS=['Arial','Calibri','Times New Roman','Georgia','Verdana','Courier New'];
@@ -10,6 +13,7 @@ const number=(v,min,max,f)=>Number.isFinite(Number(v))?Math.min(max,Math.max(min
 const text=v=>String(v??'');
 const reportImage=v=>typeof v==='string'&&v.length<=1500000&&/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(v)?v:'';
 const align=v=>['left','center','right'].includes(v)?v:'center';
+const FINDING_TYPES=['Não definida','Anomalia','Falha','Observação','Condição conforme'];
 const IMAGE_FIELDS=['coverImage','headerImage','footerImage'];
 let editor=null, areaDraft=null;
 const assets=new Map();
@@ -22,7 +26,7 @@ function defaults(r){
   sections[5].kind='technical';
   sections[6].kind='photos';
   sections[7].body=r.profile.methodology||'';
-  return {version:2,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),coverImage:'',coverImageHeight:125,coverDetailsAlign:'right',headerImage:'',headerImageWidth:45,headerImageAlign:'left',footerImage:'',footerImageWidth:100,footerImageAlign:'center',toc:true,sections};
+  return {version:2,title:r.profile.reportTitle||'LAUDO TÉCNICO DE INSPEÇÃO PREDIAL',propertyType:r.i.propertyType||r.condo?.propertyType||'',columns:2,fontFamily:'Arial',fontSize:11,headingSize:16,textColor:'#172638',headingColor:'#12355b',header:r.profile.company||r.condo?.name||'Inspec360',footer:[r.i.engineer||r.profile.engineer,r.i.crea||r.profile.crea].filter(Boolean).join(' · '),coverImage:'',coverImageHeight:125,coverDetailsAlign:'right',headerImage:'',headerImageWidth:45,headerImageAlign:'left',footerImage:'',footerImageWidth:100,footerImageAlign:'center',findingStyles:{},toc:true,sections};
 }
 function normalize(value,r){
   const base=defaults(r),raw=value&&typeof value==='object'?value:{};
@@ -37,12 +41,25 @@ function normalize(value,r){
   result.coverImageHeight=number(result.coverImageHeight,60,150,125);
   result.coverDetailsAlign=align(result.coverDetailsAlign);
   for(const part of ['header','footer']){result[part+'ImageWidth']=number(result[part+'ImageWidth'],15,176,part==='header'?45:100);result[part+'ImageAlign']=align(result[part+'ImageAlign']);}
+  const rawStyles=raw.findingStyles&&typeof raw.findingStyles==='object'?raw.findingStyles:{};
+  result.findingStyles=Object.fromEntries([...new Set([...FINDING_TYPES,...Object.keys(rawStyles)])].filter(k=>k&&k.length<=100).map(k=>[k,{color:color(rawStyles[k]?.color,result.textColor),fontSize:number(rawStyles[k]?.fontSize,8,24,result.fontSize)}]));
   const ids=new Set();
+  function content(list){return (Array.isArray(list)?list:[]).slice(0,200).map(b=>{
+    if(!b||typeof b!=='object')return null;
+    let id=/^[a-zA-Z0-9_-]+$/.test(b.id||'')?b.id:uid();if(ids.has(id))id=uid();ids.add(id);const base={id,type:b.type};
+    if(b.type==='text')return {...base,text:text(b.text)};
+    if(b.type==='image')return {...base,image:reportImage(b.image),caption:text(b.caption).slice(0,500),width:number(b.width,25,176,150),height:number(b.height,30,160,80),align:align(b.align)};
+    if(b.type==='table'){
+      const rows=(Array.isArray(b.rows)?b.rows:[]).slice(0,100).map(row=>(Array.isArray(row)?row:[]).slice(0,8).map(v=>text(v).slice(0,4000)));
+      const cols=Math.max(1,...rows.map(r=>r.length));return {...base,caption:text(b.caption).slice(0,500),header:b.header!==false,rows:rows.length?rows.map(r=>Array.from({length:cols},(_,i)=>r[i]||'')):[['']]};
+    }return null;
+  }).filter(Boolean);}
+
   function nodes(list,depth=1){
     if(depth>6||!Array.isArray(list))return [];
     return list.map(n=>{
       let id=/^[a-zA-Z0-9_-]+$/.test(n.id||'')?n.id:uid();if(ids.has(id))id=uid();ids.add(id);
-      return {id,title:text(n.title).slice(0,180),body:text(n.body),enabled:n.enabled!==false,kind:['text','photos','identification','technical'].includes(n.kind)?n.kind:'text',children:nodes(n.children,depth+1)};
+      return {id,title:text(n.title).slice(0,180),body:text(n.body),content:content(n.content),enabled:n.enabled!==false,kind:['text','photos','identification','technical'].includes(n.kind)?n.kind:'text',children:nodes(n.children,depth+1)};
     });
   }
   result.sections=nodes(Array.isArray(raw.sections)?raw.sections:base.sections);
@@ -76,33 +93,44 @@ function imageControl(key,title){
   return `<section class="re-image-control"><h4>${title}</h4>${value?`<img class="re-image-thumbnail" src="${esc(value)}" alt="${title}">`:'<p class="hint">Nenhuma imagem selecionada.</p>'}<label class="field"><span>Selecionar imagem (PNG, JPEG ou WebP, até 10 MB)</span><input type="file" accept="image/png,image/jpeg,image/webp" data-report-image="${key}" ${disabled}></label>${canEdit()?`${value?btn('Remover imagem','reportRemoveImage',`data-field="${key}"`,'sm'):''}${key!=='coverImage'&&reportImage(reportData(editor.inspection.id).profile.logo)?btn('Usar logo das configurações','reportUseProfileLogo',`data-field="${key}"`,'sm'):''}`:''}${key==='coverImage'?`${optionField('coverImageHeight','Altura máxima da foto na capa (mm)','number')}${optionField('coverDetailsAlign','Alinhamento dos dados da capa')}`:`${optionField(key+'Width','Largura máxima da imagem (mm)','number')}${optionField(key+'Align','Alinhamento da imagem')}`}</section>`;
 }
 async function uploadReportImage(key,file){
-  if(!canEdit()||!IMAGE_FIELDS.includes(key)||!file)return;
+  if(!canEdit()||(!IMAGE_FIELDS.includes(key)&&key!=='topicImage')||!file)return;
+  const target=editor,topic=key==='topicImage'?findNode(editor.selected)?.node:null;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('Use uma imagem PNG, JPEG ou WebP.');
   if(file.size>10*1024*1024)throw Error('Selecione uma imagem com até 10 MB.');
   const bitmap=await createImageBitmap(file);
   try{
     if(!bitmap.width||!bitmap.height)throw Error('Imagem inválida.');
-    const max=key==='coverImage'?1600:2000,ratio=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+    const max=key==='coverImage'||key==='topicImage'?1600:2000,ratio=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
     const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
-    const ctx=canvas.getContext('2d');if(key==='coverImage'){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);}ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-    const value=canvas.toDataURL(key==='coverImage'?'image/jpeg':'image/png',.86);
+    const ctx=canvas.getContext('2d');if(key==='coverImage'||key==='topicImage'){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);}ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const value=canvas.toDataURL(key==='coverImage'||key==='topicImage'?'image/jpeg':'image/png',.86);
     if(!reportImage(value))throw Error('A imagem ficou muito grande. Reduza sua resolução antes de enviar.');
-    editor.draft[key]=value;dirty();
+    if(editor!==target)return;
+    if(topic)(topic.content||=[]).push({id:uid(),type:'image',image:value,caption:'',width:150,height:80,align:'center'});else editor.draft[key]=value;dirty();
   }finally{bitmap.close();}
 }
+function findingStyleControls(){
+  const types=[...new Set([...FINDING_TYPES,...Object.keys(editor.draft.findingStyles||{}),...(D.findings||[]).map(f=>f.classification||'Não definida')])],disabled=canEdit()?'':'disabled';
+  return `<details class="re-options re-finding-styles"><summary>Cores e tamanhos dos tipos de constatação</summary><p class="hint">Aplica a cor e o tamanho ao título, descrição, classificação, prioridade e recomendação de cada constatação no laudo.</p><div class="grid3">${types.map(type=>{const style=Object.hasOwn(editor.draft.findingStyles,type)?editor.draft.findingStyles[type]:{color:editor.draft.textColor,fontSize:editor.draft.fontSize};return `<div class="re-image-control"><h4>${esc(type)}</h4><label class="field"><span>Cor do texto</span><input type="color" data-finding-type="${esc(type)}" data-finding-style="color" value="${style.color}" ${disabled}></label><label class="field"><span>Tamanho do texto (pt)</span><input type="number" min="8" max="24" data-finding-type="${esc(type)}" data-finding-style="fontSize" value="${style.fontSize}" ${disabled}></label></div>`;}).join('')}</div></details>`;
+}
+function contentEditor(node){
+ const disabled=canEdit()?'':'disabled';
+ return `<div class="re-topic-content"><h4>Imagens, tabelas e textos adicionais</h4><p class="hint">Os blocos aparecem após o texto do tópico, na ordem abaixo. Adicione blocos de texto para intercalar imagens e tabelas; use as setas para reorganizar.</p>${canEdit()?`<div class="row">${btn('+ Bloco de texto','reportContentText','','sm')}${btn('+ Tabela','reportContentTable','','sm')}<label class="btn sm">+ Imagem<input type="file" accept="image/png,image/jpeg,image/webp" data-topic-image hidden></label></div>`:''}${(node.content||[]).map((b,index)=>`<section class="re-content-block" data-block-id="${esc(b.id)}"><div class="row between"><strong>${index+1}. ${{text:'Texto',image:'Imagem',table:'Tabela'}[b.type]}</strong>${canEdit()?`<div class="row">${btn('↑','reportContentMove',`data-id="${esc(b.id)}" data-dir="-1" aria-label="Subir bloco"`,'sm')}${btn('↓','reportContentMove',`data-id="${esc(b.id)}" data-dir="1" aria-label="Descer bloco"`,'sm')}${btn('Excluir bloco','reportContentDelete',`data-id="${esc(b.id)}"`,'sm danger')}</div>`:''}</div>${b.type==='text'?`<label class="field"><span>Texto adicional</span><textarea data-content-id="${esc(b.id)}" data-content-field="text" ${disabled}>${esc(b.text)}</textarea></label>`:''}${b.type==='image'?`<img class="re-image-thumbnail" src="${esc(b.image)}" alt="Imagem do tópico"><label class="field"><span>Legenda</span><input data-content-id="${esc(b.id)}" data-content-field="caption" maxlength="500" value="${esc(b.caption)}" ${disabled}></label><div class="grid3">${[['width','Largura máxima (mm)',25,176],['height','Altura máxima (mm)',30,160]].map(([field,label,min,max])=>`<label class="field"><span>${label}</span><input type="number" min="${min}" max="${max}" data-content-id="${esc(b.id)}" data-content-field="${field}" value="${b[field]}" ${disabled}></label>`).join('')}<label class="field"><span>Alinhamento</span><select data-content-id="${esc(b.id)}" data-content-field="align" ${disabled}>${[['left','À esquerda'],['center','Centralizado'],['right','À direita']].map(([v,label])=>`<option value="${v}" ${v===b.align?'selected':''}>${label}</option>`).join('')}</select></label></div>`:''}${b.type==='table'?`<label class="field"><span>Título da tabela (opcional)</span><input data-content-id="${esc(b.id)}" data-content-field="caption" maxlength="500" value="${esc(b.caption)}" ${disabled}></label><label><input type="checkbox" data-content-id="${esc(b.id)}" data-content-field="header" ${b.header?'checked':''} ${disabled}> Primeira linha como cabeçalho</label><div class="re-table-editor"><table>${b.rows.map((row,ri)=>`<tr>${row.map((cell,ci)=>`<td><textarea aria-label="Linha ${ri+1}, coluna ${ci+1}" data-content-id="${esc(b.id)}" data-table-row="${ri}" data-table-col="${ci}" maxlength="4000" ${disabled}>${esc(cell)}</textarea></td>`).join('')}</tr>`).join('')}</table></div>${canEdit()?`<div class="row">${[['rowAdd','+ Linha'],['rowRemove','− Última linha'],['colAdd','+ Coluna'],['colRemove','− Última coluna']].map(([op,label])=>btn(label,'reportTableResize',`data-id="${esc(b.id)}" data-op="${op}"`,'sm')).join('')}</div>`:''}`:''}</section>`).join('')}</div>`;
+}
+function contentEdit(change){if(!editor||editor.busy||!canEdit())return;const f=findNode(editor.selected);if(!f)return;f.node.content||=[];change(f.node.content);dirty();renderWorkbench();}
 function outlineHTML(nodes=editor.draft.sections,depth=1,prefix=''){
   return nodes.map((n,i)=>{const label=prefix+(i+1);return `<button type="button" data-action="reportChoose" data-id="${esc(n.id)}" aria-current="${editor.selected===n.id}" style="padding-left:${8+(depth-1)*13}px" class="${n.enabled?'':'re-excluded'}">${label}. ${esc(n.title||'Sem título')}</button>${outlineHTML(n.children,depth+1,label+'.')}`;}).join('');
 }
 function selectedHTML(){
   const found=findNode(editor.selected);if(!found)return '<p class="hint">Adicione ou selecione um tópico.</p>';
   const {node,depth}=found,disabled=canEdit()?'':'disabled';
-  return `<h3>Conteúdo do tópico</h3><div class="field"><label for="rp-section-title">Título do tópico</label><input id="rp-section-title" maxlength="180" data-section-field="title" value="${esc(node.title)}" ${disabled}></div><div class="field"><label for="rp-section-kind">Conteúdo automático deste tópico</label><select id="rp-section-kind" data-section-field="kind" ${disabled}>${[['text','Somente o texto preenchido'],['photos','Ambientes, itens, constatações e fotos da inspeção'],['identification','Identificação do imóvel'],['technical','Dados do responsável técnico']].map(([value,label])=>`<option value="${value}" ${node.kind===value?'selected':''}>${label}</option>`).join('')}</select></div><label><input type="checkbox" data-section-field="enabled" ${node.enabled?'checked':''} ${disabled}> Incluir este tópico e seus subitens no laudo</label><div class="field" style="margin-top:12px"><label for="rp-section-body">Texto do tópico</label><textarea id="rp-section-body" data-section-field="body" ${disabled}>${esc(node.body)}</textarea></div>${node.kind!=='text'?`<p class="hint">${({photos:'As áreas, os itens, as constatações e as fotos desta inspeção serão incluídos automaticamente, na ordem cadastrada.',identification:'A identificação do empreendimento e o tipo do imóvel serão incluídos automaticamente.',technical:'Os dados cadastrados do responsável técnico serão incluídos automaticamente.'})[node.kind]}</p>`:''}${canEdit()?`<div class="row">${depth<6?btn('+ Subitem','reportAddChild','','sm'):''}${btn('↑ Subir','reportMoveUp','','sm')}${btn('↓ Descer','reportMoveDown','','sm')}${btn('Excluir tópico','reportDelete','','sm danger')}</div>`:''}`;
+  return `<h3>Conteúdo do tópico</h3><div class="field"><label for="rp-section-title">Título do tópico</label><input id="rp-section-title" maxlength="180" data-section-field="title" value="${esc(node.title)}" ${disabled}></div><div class="field"><label for="rp-section-kind">Conteúdo automático deste tópico</label><select id="rp-section-kind" data-section-field="kind" ${disabled}>${[['text','Somente o texto preenchido'],['photos','Ambientes, itens, constatações e fotos da inspeção'],['identification','Identificação do imóvel'],['technical','Dados do responsável técnico']].map(([value,label])=>`<option value="${value}" ${node.kind===value?'selected':''}>${label}</option>`).join('')}</select></div><label><input type="checkbox" data-section-field="enabled" ${node.enabled?'checked':''} ${disabled}> Incluir este tópico e seus subitens no laudo</label><div class="field" style="margin-top:12px"><label for="rp-section-body">Texto do tópico</label><textarea id="rp-section-body" data-section-field="body" ${disabled}>${esc(node.body)}</textarea></div>${node.kind!=='text'?`<p class="hint">${({photos:'As áreas, os itens, as constatações e as fotos desta inspeção serão incluídos automaticamente, na ordem cadastrada.',identification:'A identificação do empreendimento e o tipo do imóvel serão incluídos automaticamente.',technical:'Os dados cadastrados do responsável técnico serão incluídos automaticamente.'})[node.kind]}</p>`:''}${contentEditor(node)}${canEdit()?`<div class="row">${depth<6?btn('+ Subitem','reportAddChild','','sm'):''}${btn('↑ Subir','reportMoveUp','','sm')}${btn('↓ Descer','reportMoveDown','','sm')}${btn('Excluir tópico','reportDelete','','sm danger')}</div>`:''}`;
 }
 function renderWorkbench(){
   const host=$('#report-workbench');if(!host||!editor)return;
   const r=reportData(editor.inspection.id),photoCount=r.sections.reduce((n,a)=>n+a.items.reduce((n,i)=>n+i.photos.length,0),0);
   const photoTopics=activePhotoTopics(editor.draft.sections);
-  host.innerHTML=`<p class="${photoCount&&!photoTopics.length?'alert':'hint'}">${photoCount} foto(s) cadastrada(s) nesta inspeção. ${photoTopics.length?'Inclusão automática em: '+photoTopics.map(n=>esc(n.title)).join(', ')+'.':'Para incluir as fotos no laudo, selecione um tópico e escolha “Ambientes, itens, constatações e fotos da inspeção” em “Conteúdo automático deste tópico”.'}</p><div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options re-branding"><summary>Imagens da capa, cabeçalho e rodapé</summary><p class="hint">As imagens são salvas com este laudo. A foto da capa aparece no centro da primeira página. Cabeçalho e rodapé aparecem em todas as páginas, com proporção preservada. Use uma imagem horizontal para faixas com contatos. Ao salvar como modelo padrão, as logomarcas são reutilizadas; a foto do imóvel permanece exclusiva desta inspeção.</p><div class="grid3">${imageControl('coverImage','Foto central da capa')}${imageControl('headerImage','Logomarca ou faixa do cabeçalho')}${imageControl('footerImage','Logomarca ou faixa do rodapé')}</div></details><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details><div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
+  host.innerHTML=`<p class="${photoCount&&!photoTopics.length?'alert':'hint'}">${photoCount} foto(s) cadastrada(s) nesta inspeção. ${photoTopics.length?'Inclusão automática em: '+photoTopics.map(n=>esc(n.title)).join(', ')+'.':'Para incluir as fotos no laudo, selecione um tópico e escolha “Ambientes, itens, constatações e fotos da inspeção” em “Conteúdo automático deste tópico”.'}</p><div class="grid2">${optionField('title','Título do laudo')}${optionField('propertyType','Tipo do imóvel (preenchimento livre)')}</div><details class="re-options re-branding"><summary>Imagens da capa, cabeçalho e rodapé</summary><p class="hint">As imagens são salvas com este laudo. A foto da capa aparece no centro da primeira página. Cabeçalho e rodapé aparecem em todas as páginas, com proporção preservada. Use uma imagem horizontal para faixas com contatos. Ao salvar como modelo padrão, as logomarcas são reutilizadas; a foto do imóvel permanece exclusiva desta inspeção.</p><div class="grid3">${imageControl('coverImage','Foto central da capa')}${imageControl('headerImage','Logomarca ou faixa do cabeçalho')}${imageControl('footerImage','Logomarca ou faixa do rodapé')}</div></details><details class="re-options"><summary>Formatação, fotografias, cabeçalho e rodapé</summary><div class="grid3">${optionField('columns','Fotografias por linha')}${optionField('fontFamily','Fonte dos textos')}${optionField('fontSize','Tamanho do texto (pt)','number')}${optionField('headingSize','Tamanho dos títulos (pt)','number')}${optionField('textColor','Cor dos textos','color')}${optionField('headingColor','Cor dos títulos','color')}</div><div class="grid2">${optionField('header','Cabeçalho das páginas')}${optionField('footer','Rodapé das páginas')}</div><label><input type="checkbox" data-report-option="toc" ${editor.draft.toc?'checked':''} ${canEdit()?'':'disabled'}> Incluir sumário com páginas</label></details>${findingStyleControls()}<div class="re-toolbar">${canEdit()?btn('Salvar laudo','reportSave','','primary'):''}${btn('Pré-visualizar páginas','previewReport')}${btn('Gerar Word (.docx)','exportDocx')}${btn('Imprimir / salvar PDF','printReport')}${canEdit()?btn('+ Tópico','reportAddRoot'):''}${isAdmin()?btn('Salvar como modelo padrão','reportSaveTemplate'):''}${canEdit()?btn('Restaurar tópicos padrão','reportReset'):''}</div><p class="hint">As alterações são salvas por inspeção. O PDF usa as páginas da pré-visualização; na impressão, selecione A4, escala 100% e desative cabeçalhos/rodapés do navegador. No Word, atualize o sumário e os campos (F9) se editar o documento.</p><div class="re-layout"><div id="report-outline" class="re-outline">${outlineHTML()}</div><div class="re-section">${selectedHTML()}</div></div>`;
 }
 function status(message,error=false){const node=$('#report-status');if(node){node.textContent=message;node.setAttribute('role',error?'alert':'status');}}
 function dirty(){editor.dirty=true;status('Há alterações ainda não salvas.');}
@@ -152,14 +180,19 @@ function reset(){if(!canEdit()||!confirm('Substituir os tópicos e a formataçã
 function asset(photo){const key=photo.id||photo.name;if(!assets.has(key))assets.set(key,URL.createObjectURL(photo.blob));return assets.get(key);}
 function compose(r,doc){
   const blocks=[];let photoNumber=0;
-  const paragraph=(value,empty=false)=>{const lines=text(value).split(/\r?\n/);for(const line of lines)if(line.trim())blocks.push({type:'paragraph',text:line,empty});};
+  const paragraph=(value,empty=false,style=null)=>{const lines=text(value).split(/\r?\n/);for(const line of lines)if(line.trim())blocks.push({type:'paragraph',text:line,empty,...(style?{style}: {})});};
   const heading=(title,level,anchor)=>blocks.push({type:'heading',text:title,level:Math.min(6,level),anchor});
   const kv=(label,value)=>paragraph(label+': '+(value||'Não informado'));
   function walk(nodes,prefix='',depth=1,start=0){
     let position=start;
     for(const n of nodes){if(!n.enabled)continue;const index=prefix+(++position),anchor='topic_'+n.id;heading(index+'. '+n.title,depth,anchor);
       if(n.body.trim())paragraph(n.body);
-      else if(n.kind==='text')paragraph('[Conteúdo não preenchido pelo responsável.]',true);
+      else if(n.kind==='text'&&!(n.content||[]).length)paragraph('[Conteúdo não preenchido pelo responsável.]',true);
+      for(const block of n.content||[]){
+        if(block.type==='text')paragraph(block.text);
+        if(block.type==='image'&&block.image)blocks.push({...block,type:'topicImage'});
+        if(block.type==='table')blocks.push({...block,type:'table'});
+      }
       let generated=0;
       if(n.kind==='identification'){
         kv('Empreendimento',r.condo?.name);kv('Tipo do imóvel',doc.propertyType);kv('Endereço',[r.condo?.address,r.condo?.neighborhood,r.condo?.city,r.condo?.state].filter(Boolean).join(' · '));kv('Identificação da inspeção',r.i.title);kv('Síndico / responsável',r.condo?.manager);
@@ -170,8 +203,8 @@ function compose(r,doc){
       if(n.kind==='photos'){
         for(const {area,items} of r.sections.slice().sort((a,b)=>(Number(a.area.order)||0)-(Number(b.area.order)||0)||String(a.area.id).localeCompare(String(b.area.id)))){const areaIndex=index+'.'+(++generated);heading(areaIndex+'. '+area.name,depth+1,'area_'+area.id);if(area.location)kv('Local',area.location);if(area.notes)paragraph(area.notes);
           for(let i=0;i<items.length;i++){
-            const entry=items[i],item=entry.item;heading(areaIndex+'.'+(i+1)+'. '+item.name,depth+2,'item_'+item.id);kv('Resultado',item.status);if(item.notes)kv('Observações',item.notes);
-            for(const f of entry.findings){paragraph(f.title||'Constatação');if(f.description)paragraph(f.description);kv('Classificação',f.classification);kv('Prioridade',f.priority);if(f.recommendation)kv('Recomendação técnica',f.recommendation);}
+            const entry=items[i],item=entry.item;heading(areaIndex+'.'+(i+1)+'. '+item.name,depth+2,'item_'+item.id);kv('Resultado',item.status);if(item.notes)paragraph(item.notes);
+            for(const f of entry.findings){const style=Object.hasOwn(doc.findingStyles||{},f.classification||'Não definida')?doc.findingStyles[f.classification||'Não definida']:{color:doc.textColor,fontSize:doc.fontSize};paragraph(f.title||'Constatação',false,style);if(blocks.length)blocks.at(-1).keepNext=true;if(f.description)paragraph(f.description,false,style);paragraph('Classificação: '+(f.classification||'Não definida'),false,style);paragraph('Prioridade: '+priorityLabel(f.priority),false,style);if(f.recommendation)paragraph('Recomendação técnica: '+f.recommendation,false,style);}
             const photos=entry.photos.map(p=>({photo:p,number:++photoNumber,caption:text(p.caption||area.name+' — '+item.name)}));
             for(let j=0;j<photos.length;j+=doc.columns){const row=photos.slice(j,j+doc.columns);blocks.push({type:'photos',photos:row,columns:doc.columns});for(const p of row)if(p.caption.length>180)paragraph('Legenda completa da foto '+p.number+': '+p.caption);}
           }
@@ -187,7 +220,9 @@ function variables(doc){return `--rp-top:${doc.headerImage?32:26}mm;--rp-bottom:
 function blockNode(b,doc){
   const el=document.createElement(b.type==='heading'?'h'+b.level:b.type==='paragraph'?'p':'div');
   if(b.type==='heading'){el.textContent=b.text;if(b.anchor){el.id=b.anchor;el.dataset.anchor=b.anchor;}}
-  if(b.type==='paragraph'){el.textContent=b.text;if(b.empty)el.className='rp-empty';}
+  if(b.type==='paragraph'){el.textContent=b.text;if(b.empty)el.className='rp-empty';if(b.style){el.style.color=b.style.color;el.style.fontSize=b.style.fontSize+'pt';}}
+  if(b.type==='topicImage'){el.className='rp-topic-image';el.style.textAlign=b.align;el.innerHTML=`<figure style="width:${b.width}mm"><img src="${esc(b.image)}" alt="${esc(b.caption||'Imagem do tópico')}" style="max-height:${b.height}mm"><figcaption>${esc(b.caption)}</figcaption></figure>`;}
+  if(b.type==='table'){el.className='rp-topic-table';el.innerHTML=`${b.caption?`<p class="rp-table-caption">${esc(b.caption)}</p>`:''}<table>${b.rows.map((row,i)=>`<${i===0&&b.header?'thead':'tbody'}><tr>${row.map(cell=>`<${i===0&&b.header?'th':'td'}>${esc(cell)}</${i===0&&b.header?'th':'td'}>`).join('')}</tr></${i===0&&b.header?'thead':'tbody'}>`).join('')}</table>`;}
   if(b.type==='toc'){
     el.className='rp-toc-row';el.style.paddingLeft=(Math.min(5,b.level-1)*4)+'mm';
     el.innerHTML=`<a href="#${esc(b.anchor)}">${esc(b.text)}</a><span class="rp-dots"></span><span class="rp-page-ref">${b.page}</span>`;
@@ -219,12 +254,17 @@ function paginate(blocks,doc,host){
     node.remove();
     // Evita deixar título sozinho no final da página.
     const last=current.blocks.at(-1);
-    if(last?.type==='heading'&&current.blocks.length>1){current.blocks.pop();current.content.lastElementChild.remove();fresh();queue.unshift(last,b);continue;}
+    if((last?.type==='heading'||last?.keepNext)&&current.blocks.length>1){current.blocks.pop();current.content.lastElementChild.remove();fresh();queue.unshift(last,b);continue;}
     if(b.type==='paragraph'){
       const piece=textPiece(current.content,b,doc);
       if(piece&&(current.blocks.length===0||piece.head.text.length>=100)){
         current.content.append(blockNode(piece.head,doc));current.blocks.push(piece.head);if(piece.tail.text){fresh();queue.unshift(piece.tail);}continue;
       }
+    }
+    if(b.type==='table'){
+      const header=b.header?b.rows.slice(0,1):[],data=b.rows.slice(header.length);let take=0;
+      for(let count=1;count<=data.length;count++){const test={...b,rows:[...header,...data.slice(0,count)]},el=blockNode(test,doc);current.content.append(el);const ok=fits(current.content);el.remove();if(!ok)break;take=count;}
+      if(take){const head={...b,rows:[...header,...data.slice(0,take)]};current.content.append(blockNode(head,doc));current.blocks.push(head);if(take<data.length){fresh();queue.unshift({...b,caption:'',rows:[...header,...data.slice(take)]});}continue;}
     }
     if(current.blocks.length){fresh();queue.unshift(b);continue;}
     throw Error('Um bloco não cabe em uma página. Reduza o tamanho da fonte ou a legenda da fotografia.');
@@ -307,7 +347,15 @@ async function makeDocx(plan){
         if(b.anchor){const n=++markIndex;body+=`<w:p><w:pPr><w:pStyle w:val="${style}"/></w:pPr><w:bookmarkStart w:id="${n}" w:name="${bookmark(b.anchor)}"/>${wrun(b.text)}<w:bookmarkEnd w:id="${n}"/></w:p>`;}
         else body+=wp(b.text,style);
       }
-      if(b.type==='paragraph')body+=wp(b.text,b.empty?'Empty':'Normal');
+      if(b.type==='paragraph')body+=b.style?`<w:p><w:pPr><w:pStyle w:val="Normal"/>${b.keepNext?'<w:keepNext/>':''}</w:pPr>${wrun(b.text,`<w:color w:val="${b.style.color.slice(1)}"/><w:sz w:val="${Math.round(b.style.fontSize*2)}"/>`)}</w:p>`:wp(b.text,b.empty?'Empty':'Normal');
+      if(b.type==='topicImage'){
+        const blob=base64ToBlob(b.image.split(',')[1],b.image.slice(5,b.image.indexOf(';')));body+=await photoImage(blob,'topic-'+b.id,b.width*96/25.4,b.height*96/25.4,b.align,'document',true);if(b.caption)body+=wp(b.caption,'Caption',`<w:jc w:val="${b.align}"/>`);
+      }
+      if(b.type==='table'){
+        if(b.caption)body+=wp(b.caption,'Normal','<w:keepNext/>');const width=Math.floor(9978/b.rows[0].length);
+        body+=`<w:tbl><w:tblPr><w:tblW w:w="9978" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders>${['top','left','bottom','right','insideH','insideV'].map(edge=>`<w:${edge} w:val="single" w:sz="4" w:color="94A3B8"/>`).join('')}</w:tblBorders><w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${b.rows[0].map(()=>`<w:gridCol w:w="${width}"/>`).join('')}</w:tblGrid>`;
+        b.rows.forEach((row,ri)=>{const header=ri===0&&b.header;body+=`<w:tr><w:trPr><w:cantSplit/>${header?'<w:tblHeader/>':''}</w:trPr>`+row.map(cell=>`<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${header?'<w:shd w:fill="E8EEF5"/>':''}</w:tcPr>`+text(cell).split(/\r?\n/).map(line=>`<w:p>${wrun(line,header?'<w:b/>':'')}</w:p>`).join('')+'</w:tc>').join('')+'</w:tr>';});body+='</w:tbl><w:p/>';
+      }
       if(b.type==='toc'){
         if(!tocStarted){body+='<w:p><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-6" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r></w:p>';tocStarted=true;}
         body+=`<w:p><w:pPr><w:pStyle w:val="TOC${b.level}"/><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9978"/></w:tabs><w:ind w:left="${Math.min(5,b.level-1)*200}"/></w:pPr><w:hyperlink w:anchor="${bookmark(b.anchor)}">${wrun(b.text)}</w:hyperlink><w:r><w:tab/></w:r>${wfield('PAGEREF '+bookmark(b.anchor)+' \\h',b.page)}</w:p>`;
@@ -367,12 +415,21 @@ function renderAreaOrder(){const node=$('#report-area-order');if(node)node.inner
 function moveArea(id,delta){if(!areaDraft)return;const i=areaDraft.areas.findIndex(a=>a.id===id),j=i+delta;if(i<0||j<0||j>=areaDraft.areas.length)return;[areaDraft.areas[i],areaDraft.areas[j]]=[areaDraft.areas[j],areaDraft.areas[i]];renderAreaOrder();}
 document.addEventListener('input',event=>{
   if(!editor||editor.busy||!canEdit()||!event.target.closest('#report-workbench'))return;
-  const key=event.target.dataset.reportOption,field=event.target.dataset.sectionField;
+  const d=event.target.dataset;
+  if(d.findingType){editor.draft.findingStyles[d.findingType]||={color:editor.draft.textColor,fontSize:editor.draft.fontSize};editor.draft.findingStyles[d.findingType][d.findingStyle]=event.target.value;dirty();return;}
+  if(d.contentId){const block=findNode(editor.selected)?.node.content?.find(b=>b.id===d.contentId);if(block){if(d.tableRow!==undefined)block.rows[Number(d.tableRow)][Number(d.tableCol)]=event.target.value;else block[d.contentField]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}return;}
+  const key=d.reportOption,field=d.sectionField;
   if(key){editor.draft[key]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}
   if(field){const found=findNode(editor.selected);if(found){found.node[field]=event.target.type==='checkbox'?event.target.checked:event.target.value;dirty();}}
 });
-document.addEventListener('change',event=>{if(event.target.dataset.reportImage){const key=event.target.dataset.reportImage,file=event.target.files?.[0];if(editor&&!editor.busy&&canEdit()&&file)run(()=>uploadReportImage(key,file));return;}if(event.target.dataset.sectionField==='kind'&&editor&&!editor.busy&&canEdit()){const found=findNode(editor.selected);if(found){found.node.kind=event.target.value;dirty();renderWorkbench();}return;}if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
-Object.assign(actionMap,{reportRemoveImage:e=>{if(editor&&!editor.busy&&canEdit()&&IMAGE_FIELDS.includes(e.dataset.field)){editor.draft[e.dataset.field]='';dirty();renderWorkbench();}},reportUseProfileLogo:e=>{if(editor&&!editor.busy&&canEdit()&&['headerImage','footerImage'].includes(e.dataset.field)){editor.draft[e.dataset.field]=reportImage(reportData(editor.inspection.id).profile.logo);dirty();renderWorkbench();}},openReport:e=>openEditor(e.dataset.id),previewReport:preview,printReport:print,exportDocx:word,reportSave:()=>run(saveDraft),reportSaveTemplate:()=>run(saveTemplate),reportChoose:e=>choose(e.dataset.id),reportAddRoot:()=>addTopic(),reportAddChild:()=>addTopic(true),reportMoveUp:()=>moveTopic(-1),reportMoveDown:()=>moveTopic(1),reportDelete:removeTopic,reportReset:reset,orderAreas:showAreaOrder,areaOrderUp:e=>moveArea(e.dataset.id,-1),areaOrderDown:e=>moveArea(e.dataset.id,1)});
+document.addEventListener('change',event=>{if(event.target.hasAttribute('data-topic-image')){const file=event.target.files?.[0];if(editor&&!editor.busy&&canEdit()&&file)run(()=>uploadReportImage('topicImage',file));return;}if(event.target.dataset.reportImage){const key=event.target.dataset.reportImage,file=event.target.files?.[0];if(editor&&!editor.busy&&canEdit()&&file)run(()=>uploadReportImage(key,file));return;}if(event.target.dataset.sectionField==='kind'&&editor&&!editor.busy&&canEdit()){const found=findNode(editor.selected);if(found){found.node.kind=event.target.value;dirty();renderWorkbench();}return;}if(event.target.dataset.sectionField&&editor){const outline=$('#report-outline');if(outline)outline.innerHTML=outlineHTML();}});
+Object.assign(actionMap,{
+reportContentText:()=>contentEdit(list=>list.push({id:uid(),type:'text',text:''})),
+reportContentTable:()=>contentEdit(list=>list.push({id:uid(),type:'table',caption:'',header:true,rows:Array.from({length:3},()=>['','',''])})),
+reportContentDelete:e=>contentEdit(list=>{const i=list.findIndex(b=>b.id===e.dataset.id);if(i>=0&&confirm('Excluir este bloco do tópico?'))list.splice(i,1);}),
+reportContentMove:e=>contentEdit(list=>{const i=list.findIndex(b=>b.id===e.dataset.id),j=i+Number(e.dataset.dir);if(i>=0&&j>=0&&j<list.length)[list[i],list[j]]=[list[j],list[i]];}),
+reportTableResize:e=>contentEdit(list=>{const b=list.find(b=>b.id===e.dataset.id);if(b?.type!=='table')return;const op=e.dataset.op;if(op==='rowAdd'&&b.rows.length<100)b.rows.push(b.rows[0].map(()=>''));if(op==='colAdd'&&b.rows[0].length<8)b.rows.forEach(r=>r.push(''));if(op==='rowRemove'&&b.rows.length>1&&confirm('Excluir a última linha da tabela?'))b.rows.pop();if(op==='colRemove'&&b.rows[0].length>1&&confirm('Excluir a última coluna da tabela?'))b.rows.forEach(r=>r.pop());}),
+reportRemoveImage:e=>{if(editor&&!editor.busy&&canEdit()&&IMAGE_FIELDS.includes(e.dataset.field)){editor.draft[e.dataset.field]='';dirty();renderWorkbench();}},reportUseProfileLogo:e=>{if(editor&&!editor.busy&&canEdit()&&['headerImage','footerImage'].includes(e.dataset.field)){editor.draft[e.dataset.field]=reportImage(reportData(editor.inspection.id).profile.logo);dirty();renderWorkbench();}},openReport:e=>openEditor(e.dataset.id),previewReport:preview,printReport:print,exportDocx:word,reportSave:()=>run(saveDraft),reportSaveTemplate:()=>run(saveTemplate),reportChoose:e=>choose(e.dataset.id),reportAddRoot:()=>addTopic(),reportAddChild:()=>addTopic(true),reportMoveUp:()=>moveTopic(-1),reportMoveDown:()=>moveTopic(1),reportDelete:removeTopic,reportReset:reset,orderAreas:showAreaOrder,areaOrderUp:e=>moveArea(e.dataset.id,-1),areaOrderDown:e=>moveArea(e.dataset.id,1)});
 reportModal=openEditor;previewReport=preview;printReport=print;exportDocx=word;
 window.ReportStudio={defaults,normalize,compose,buildPlan,makeDocx,ordered,open:openEditor,save:saveDraft,getDraft:()=>editor?.draft};
 })();

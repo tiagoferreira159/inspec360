@@ -176,3 +176,10 @@ No editor do laudo, expanda **Imagens da capa, cabeçalho e rodapé**. Selecione
 - **Logomarca ou faixa do rodapé**: repetida em todas as páginas, acima do texto e da numeração. Uma faixa horizontal pode conter logomarca, telefone e contatos, como no modelo de referência.
 
 Aceita PNG, JPEG e WebP de até 10 MB. As imagens são preparadas para o documento, preservando as proporções; logos preservam transparência. É possível remover ou substituir qualquer uma e, quando houver logo nas configurações gerais, reutilizá-la no cabeçalho/rodapé. Clique em **Salvar laudo** para gravar; depois use a prévia, PDF ou Word. A imagem da capa pertence à inspeção; **Salvar como modelo padrão** reutiliza as logomarcas e a formatação sem copiar a foto do imóvel para outras inspeções.
+
+### Conteúdo dos tópicos e estilos das constatações
+Selecione um tópico no editor do laudo. Abaixo do texto principal, **Imagens, tabelas e textos adicionais** oferece **+ Imagem**, **+ Tabela** e **+ Bloco de texto**. Os blocos são incluídos após o texto principal; use as setas para intercalar/reordenar. Imagens têm legenda, largura, altura máxima e alinhamento. Tabelas permitem editar as células, definir título, habilitar a primeira linha como cabeçalho e acrescentar/remover linhas e colunas (até 100 linhas e 8 colunas). O cabeçalho é repetido quando a tabela ocupa mais de uma página. O Word contém tabelas editáveis e imagens incorporadas.
+
+Expanda **Cores e tamanhos dos tipos de constatação** para definir a cor e o tamanho do texto por classificação. A configuração vale para título, descrição, classificação, prioridade e recomendação da constatação no laudo. Clique em **Salvar laudo** para gravar por inspeção ou **Salvar como modelo padrão** para reutilizar a configuração. Usuários de consulta visualizam e exportam, sem alterar o conteúdo.
+
+As notas gerais dos itens são apresentadas diretamente, sem o prefixo “Observações”. Prioridades na tela e no laudo: **0 - Crítica; 1 - Alta; 2 - Média; 3 - Baixa; Não definida**. Os valores antigos continuam compatíveis, sem necessidade de modificar os registros existentes.
