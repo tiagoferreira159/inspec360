@@ -39,3 +39,15 @@
   for = "/template-studio.js"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/password-reset.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    Referrer-Policy = "no-referrer"
+
+[[headers]]
+  for = "/password-reset.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
