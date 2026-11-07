@@ -309,7 +309,7 @@ async function buildPlan(r,input){
     return {r,doc,pages,headings:tocRows,pageMap,element:container};
   }finally{host.remove();}
 }
-async function prepare(){await persist();const r=reportData(editor.inspection.id);return buildPlan(r,editor.draft);}
+async function prepare(){await persist();const r=reportData(editor.inspection.id);status('Carregando fotografias desta inspeção…');await ensurePhotos(D.photos.filter(p=>p.inspectionId===editor.inspection.id));return buildPlan(r,editor.draft);}
 async function preview(){await run(async()=>{const plan=await prepare();$('#report-preview').replaceChildren(plan.element);status('Pré-visualização pronta: '+plan.pages.length+' páginas.');});}
 async function print(){await run(async()=>{const plan=await prepare();$('#report-preview').replaceChildren();$('#print-host').replaceChildren(plan.element);status('Documento pronto para impressão: '+plan.pages.length+' páginas.');await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));window.print();});}
 // Word: estilos, sumário nativo com cache de páginas, cabeçalhos, rodapés e tabelas de fotografias.
@@ -433,3 +433,4 @@ reportRemoveImage:e=>{if(editor&&!editor.busy&&canEdit()&&IMAGE_FIELDS.includes(
 reportModal=openEditor;previewReport=preview;printReport=print;exportDocx=word;
 window.ReportStudio={defaults,normalize,compose,buildPlan,makeDocx,ordered,open:openEditor,save:saveDraft,getDraft:()=>editor?.draft};
 })();
+
