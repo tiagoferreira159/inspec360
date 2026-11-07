@@ -253,11 +253,11 @@ async function ensurePhoto(photo){
   if(!path)throw Error('Fotografia sem caminho no armazenamento.');
   if(photoCache.has(path)){photo.blob=photoCache.get(path);return photo.blob;}
   if(!pendingPhotos.has(path)){
-    const session=cloudSession;
+    const account=cloudSession?.user?.id, workspace=workspaceId;
     pendingPhotos.set(path,photoTask(async()=>{
-      if(cloudSession!==session)throw Error('Sessão alterada. Abra a fotografia novamente.');
+      if(!cloudSession||cloudSession.user?.id!==account||workspaceId!==workspace)throw Error('Sessão alterada. Abra a fotografia novamente.');
       const blob=await cloudRequest('/storage/v1/object/authenticated/'+cloudConfig.bucket+'/'+path,{blob:true});
-      if(cloudSession!==session)throw Error('Sessão alterada.');
+      if(!cloudSession||cloudSession.user?.id!==account||workspaceId!==workspace)throw Error('Sessão alterada.');
       photoCache.set(path,blob);return blob;
     }).finally(()=>pendingPhotos.delete(path)));
   }
