@@ -65,9 +65,7 @@ async function load() {
     const entry={...r.payload,id:r.id,_revision:r.updated_at};
     if(r.kind==='photos'){
       if(!entry.storagePath)throw Error('Fotografia sem caminho no armazenamento: '+r.id);
-      let cached=photoCache.get(entry.storagePath);
-      if(!cached){cached=await cloudRequest('/storage/v1/object/authenticated/'+cloudConfig.bucket+'/'+entry.storagePath,{blob:true});photoCache.set(entry.storagePath,cached);}
-      entry.blob=cached;
+      entry.blob=photoCache.get(entry.storagePath);
     }
     next[r.kind].push(entry);
   }
@@ -203,12 +201,13 @@ function passwordModal(){
 }
 async function backup(lite=false){
   if(!isAdmin())throw Error('Somente administrador.');await load();
+  if(!lite){toast('Carregando fotos para o backup completo…');await ensurePhotos(D.photos);}
   const output={format:'Inspec360Backup',version:2,created:new Date().toISOString(),data:{}};
   for(const kind of stores.filter(s=>s!=='users')){
     output.data[kind]=[];
     for(const record of D[kind]){
       const entry={...record};delete entry._revision;delete entry.storagePath;delete entry.blob;
-      if(kind==='photos'&&!lite){entry.base64=bufToBase64(await record.blob.arrayBuffer());entry.mime=record.blob.type;}
+      if(kind==='photos'&&!lite){const blob=await ensurePhoto(record);entry.base64=bufToBase64(await blob.arrayBuffer());entry.mime=blob.type;}
       output.data[kind].push(entry);
     }
   }
@@ -240,3 +239,41 @@ async function restoreFile(file){
   }catch(e){alert('Importação: '+e.message+' Se o envio já havia começado, confira os registros enviados antes de tentar novamente.');}
 }
 
+
+
+// Fotos são obtidas apenas quando visíveis ou necessárias para exportação.
+const pendingPhotos = new Map();
+let photoActive = 0;
+const photoQueue = [];
+function photoTask(task){return new Promise((resolve,reject)=>{photoQueue.push({task,resolve,reject});pumpPhotos();});}
+function pumpPhotos(){while(photoActive<6&&photoQueue.length){const job=photoQueue.shift();photoActive++;Promise.resolve().then(job.task).then(job.resolve,job.reject).finally(()=>{photoActive--;pumpPhotos();});}}
+async function ensurePhoto(photo){
+  if(photo.blob instanceof Blob)return photo.blob;
+  const path=photo.storagePath;
+  if(!path)throw Error('Fotografia sem caminho no armazenamento.');
+  if(photoCache.has(path)){photo.blob=photoCache.get(path);return photo.blob;}
+  if(!pendingPhotos.has(path)){
+    const account=cloudSession?.user?.id, workspace=workspaceId;
+    pendingPhotos.set(path,photoTask(async()=>{
+      if(!cloudSession||cloudSession.user?.id!==account||workspaceId!==workspace)throw Error('Sessão alterada. Abra a fotografia novamente.');
+      const blob=await cloudRequest('/storage/v1/object/authenticated/'+cloudConfig.bucket+'/'+path,{blob:true});
+      if(!cloudSession||cloudSession.user?.id!==account||workspaceId!==workspace)throw Error('Sessão alterada.');
+      photoCache.set(path,blob);return blob;
+    }).finally(()=>pendingPhotos.delete(path)));
+  }
+  photo.blob=await pendingPhotos.get(path);return photo.blob;
+}
+async function ensurePhotos(photos){await Promise.all(photos.map(ensurePhoto));}
+const photoPlaceholder='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220"><rect width="100%" height="100%" fill="#eef2f7"/><text x="50%" y="50%" text-anchor="middle" fill="#64748b" font-size="16">Carregando foto…</text></svg>');
+urlPhoto=function(photo){
+  if(photo.blob instanceof Blob){const url=URL.createObjectURL(photo.blob);urls.add(url);return url;}
+  return photoPlaceholder+'#cloud-photo='+encodeURIComponent(photo.id);
+};
+const visiblePhotos=new IntersectionObserver(entries=>{
+  for(const entry of entries){if(!entry.isIntersecting)continue;const img=entry.target;visiblePhotos.unobserve(img);
+    const src=img.getAttribute('src'),id=decodeURIComponent(src.split('#cloud-photo=')[1]||'');
+    const photo=D.photos?.find(p=>p.id===id);if(!photo)continue;
+    ensurePhoto(photo).then(()=>{if(img.isConnected&&img.getAttribute('src')===src)img.src=urlPhoto(photo);}).catch(()=>{if(img.isConnected){img.alt='Não foi possível carregar a foto. Abra novamente para tentar.';img.title=img.alt;}});
+  }
+},{rootMargin:'200px'});
+new MutationObserver(()=>{document.querySelectorAll('img[src*="#cloud-photo="]').forEach(img=>visiblePhotos.observe(img));}).observe(document.body,{childList:true,subtree:true});
