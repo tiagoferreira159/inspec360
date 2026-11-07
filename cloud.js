@@ -129,6 +129,8 @@ async function compressPhoto(blob){
   if(!result)throw Error('Não foi possível converter esta foto.');return result;
 }
 async function initAuth(){
+  const recovery=new URLSearchParams(location.hash.slice(1));
+  if(recovery.get('type')==='recovery'||recovery.has('error_code')){location.replace('/password-reset.html'+location.hash);return;}
   showAuth();
   try{
     const saved=sessionStorage.getItem(sessionKey);if(!saved)return;
@@ -139,7 +141,7 @@ async function initAuth(){
 }
 function showAuth(message=''){
   const root=$('#auth-layer');root.style.display='flex';
-  root.innerHTML=`<div class="auth-card"><h1>INSPEC<span style="color:#2563eb">360</span></h1><p class="hint">Acesso seguro · dados na nuvem</p><form id="auth-form">${field('email','E-mail','','email',true).replaceAll('f-email','login-email')}${field('password','Senha','','password',true).replaceAll('f-password','login-password')}<p class="auth-error" id="auth-error">${esc(message)}</p><button type="submit" class="btn primary" style="width:100%">Entrar</button></form><p class="hint">Utilize a conta cadastrada pelo administrador. Para redefinir a senha, solicite apoio ao responsável pelo sistema.</p></div>`;
+  root.innerHTML=`<div class="auth-card"><h1>INSPEC<span style="color:#2563eb">360</span></h1><p class="hint">Acesso seguro · dados na nuvem</p><form id="auth-form">${field('email','E-mail','','email',true).replaceAll('f-email','login-email')}${field('password','Senha','','password',true).replaceAll('f-password','login-password')}<p class="auth-error" id="auth-error">${esc(message)}</p><button type="submit" class="btn primary" style="width:100%">Entrar</button></form><p><a href="/password-reset.html">Esqueci minha senha</a></p><p class="hint">Utilize a conta cadastrada pelo administrador.</p></div>`;
   $('#auth-form').onsubmit=async e=>{
     e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;$('#auth-error').textContent='Conectando…';
     const v=Object.fromEntries(new FormData(e.target));
@@ -237,3 +239,4 @@ async function restoreFile(file){
     await load();render();toast('Importação concluída. Usuários locais foram ignorados.');
   }catch(e){alert('Importação: '+e.message+' Se o envio já havia começado, confira os registros enviados antes de tentar novamente.');}
 }
+
